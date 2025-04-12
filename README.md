@@ -61,14 +61,20 @@ RedDragon Token ──► Fee Manager ──┬─► ve8020 System ──► Fe
 ## Contract Addresses
 
 ### Mainnet (Sonic Network)
-- **RedDragon Token**: `0x45237fD4F00FB2160005dB659D4dD5B36b77c265`
-- **RedDragonFeeManager**: `0xB59529C7ff72dEb7E7007a443492be052bC3Fdb5`
-- **RedDragonSwapLottery**: `0x55eF655ff73E1F8FD0fA07b95634fD28A7C0A8fa`
-- **RedDragonVerifier**: `0x05B0CE5E85f5ef1945886b85b8e5FBF9246Ac05F` (Secure Verifier)
-- **RedDragonPaintSwapVerifier**: `0x30cCC29B339FCB698E502aD179C2aA78c13B88d0` (Secure Verifier)
-- **ve8020**: `0x6f542540D8CDd89b7A60208Dddd3BcBd2133fc5d`
-- **ve8020FeeDistributor**: `0x735AC559fFb23836Be856578DBCE928E4c9f6375`
-- **Wrapped Sonic**: `0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38`
+- **RedDragon Token**: `0x350BD3f347337B15dDd9E9dC91442b16198270e8`
+- **RedDragonSwapLottery**: `0xe10A5A8bA7021AD61d9b9172981278eE68B01424`
+- **PaintSwap Verifier**: `0x26a01DA72b54E879f185CEd59241E1CC42564Ed1`
+- **RedDragonLPBooster**: `0x2A60ffcBf83877f18Bc7fEF9790e2598918AfCA4`
+- **ve8020**: `0x2ca4fBAC6326C23F7D2d48f465221EA316773b1a`
+- **Ve8020FeeDistributor**: `0xb9200A42789B2bae732F8654d125418b0A52639C`
+- **RedDragonFeeManager**: `0x9420C03f473a3E4fD335A31f6bB39fDE18E42A8E`
+- **RedDragonMultiSig**: `0x03bF2b1eC635783c88aD880D85F0c8c689EE962C` 
+- **LP Token**: `0xc59944C9AFe9eA9c87b21dBb3D753c5D1ccCF978`
+- **Jackpot Vault**: `0xc57afdcb9b47bb7a2dc07c8ab8054e96c103fc6b`
+- **Liquidity Vault**: `0x78266EAb20Ff1483a926F183B3E5A6C84f87D54c`
+- **Development Vault**: `0x78266EAb20Ff1483a926F183B3E5A6C84f87D54c`
+- **Burn Address**: `0x000000000000000000000000000000000000dEaD`
+- **Wrapped Sonic**: `0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38`
 
 ## Security Features
 
