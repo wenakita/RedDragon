@@ -1,0 +1,42 @@
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Hardhat files
+cache/
+artifacts/
+typechain-types/
+
+# Coverage files
+coverage/
+coverage.json
+
+# Build files
+dist/
+build/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Deployment notes
+deployment-notes.md
+
+# Private keys and mnemonics
+*.secret
+mnemonic.txt 
