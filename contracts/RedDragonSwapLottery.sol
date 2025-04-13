@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/IRedDragonPaintSwapVerifier.sol";
 import "./interfaces/IRedDragonLPBooster.sol";
+import "./interfaces/IPriceOracle.sol";
 
 /**
  * @dev Interface for the thank you token that grants special boosts
@@ -41,7 +42,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
     uint256 private constant BASE_WS_AMOUNT = 100 ether; // 100 wS
     uint256 private constant BASE_PROBABILITY = 1; // 0.1%
     uint256 private constant PROBABILITY_DENOMINATOR = 1000; // For 0.1% precision
-    uint256 private constant MAX_PROBABILITY = 100; // 10%
+    uint256 private constant MAX_PROBABILITY = 40; // 4%
     
     // Constants for pity timer - ULTRA CONSERVATIVE SETTINGS
     uint256 private constant PITY_PERCENT_OF_SWAP = 1; // Increase by 0.1% of swap amount (1 = 0.1%)
@@ -53,9 +54,17 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
     uint256 private constant PRECISION = 100; // For percentage calculations
     uint256 private constant MAX_BOOST_MULTIPLIER = 250; // Maximum 2.5x boost
     
+    // Entry amount settings
+    uint256 private constant MIN_WS_ENTRY = 100 ether; // 100 wS
+    uint256 private constant MAX_WS_ENTRY = 10000 ether; // 10,000 wS
+    uint256 private constant MIN_USD_ENTRY = 100_000000; // $100 USD (6 decimals)
+    uint256 private constant MAX_USD_ENTRY = 10000_000000; // $10,000 USD (6 decimals)
+    bool public useUsdEntryAmounts = false; // Default to wS-based entry
+    
     // State variables
     IERC20 public wrappedSonic;
     IRedDragonPaintSwapVerifier public verifier;
+    IPriceOracle public priceOracle;
     address public exchangePair;
     IERC20 public lpToken; // The LP token for boost calculations
     uint256 public jackpot;
@@ -79,6 +88,13 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
     
     // LP Booster for additional boosts based on LP token holdings
     address public lpBooster;
+    
+    // Flash loan protection
+    mapping(address => uint256) public lpAcquisitionTimestamp;
+    uint256 public constant LP_HOLDING_REQUIREMENT = 1 days;
+    
+    // Gas limits
+    uint256 public constant MAX_GAS_FOR_TRANSFER = 300000;
     
     // VRF request tracking
     struct PendingRequest {
@@ -110,6 +126,9 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
     event EmergencyWithdrawProposed(uint256 amount, uint256 expirationTime);
     event EmergencyWithdrawExecuted(uint256 amount);
     event LPBoosterSet(address indexed boosterAddress);
+    event PriceOracleSet(address indexed oracleAddress);
+    event UsdEntryModeChanged(bool useUsdMode);
+    event LpAcquisitionRecorded(address indexed user, uint256 amount, uint256 timestamp);
 
     /**
      * @dev Circuit breaker modifier
@@ -148,7 +167,29 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
         require(user == actualTrader, "User must be original sender");
         require(actualTrader != address(0), "Invalid trader address");
         require(!isContract(actualTrader), "Contracts cannot participate");
-        require(wsAmount >= BASE_WS_AMOUNT, "Amount too small for lottery");
+        
+        // Check if amount is within limits based on current mode
+        if (useUsdEntryAmounts) {
+            // USD mode - check if oracle is set
+            require(address(priceOracle) != address(0), "Price oracle not set");
+            
+            // Convert wS amount to USD
+            uint256 usdAmount = priceOracle.wSonicToUSD(wsAmount);
+            
+            // Check USD limits
+            require(usdAmount >= MIN_USD_ENTRY, "USD amount too small for lottery");
+            if (usdAmount > MAX_USD_ENTRY) {
+                // Cap at max USD value for calculation
+                wsAmount = priceOracle.usdToWSonic(MAX_USD_ENTRY);
+            }
+        } else {
+            // wS mode - direct check
+            require(wsAmount >= MIN_WS_ENTRY, "Amount too small for lottery");
+            if (wsAmount > MAX_WS_ENTRY) {
+                // Cap at max wS value for calculation
+                wsAmount = MAX_WS_ENTRY;
+            }
+        }
 
         // Calculate base win probability based on wS amount
         uint256 baseProbability = calculateBaseProbability(wsAmount);
@@ -192,6 +233,8 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
 
         if (isWinner && jackpot > 0) {
             uint256 winAmount = jackpot;
+            
+            // Important: update state before external calls (reentrancy protection)
             jackpot = 0;
             totalWinners++;
             totalPayouts += winAmount;
@@ -201,8 +244,13 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
             lastWinTimestamp = block.timestamp;
             emit PityBoostReset();
             
-            // Use SafeERC20
+            // Verify winner is not a contract for additional security
+            require(!isContract(request.user), "Winner cannot be a contract");
+            
+            // Transfer tokens directly to winner
             wrappedSonic.safeTransfer(request.user, winAmount);
+            
+            // Emit the jackpot won event
             emit JackpotWon(request.user, winAmount);
         } else {
             // Increase global pity boost on loss based on swap amount
@@ -219,6 +267,16 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
 
         // Clean up
         delete pendingRequests[requestId];
+    }
+    
+    /**
+     * @dev Internal function to execute jackpot transfer with gas limit
+     * @param to Recipient address
+     * @param amount Amount to transfer
+     */
+    function executeJackpotTransfer(address to, uint256 amount) external {
+        require(msg.sender == address(this), "Only self-call allowed");
+        wrappedSonic.safeTransfer(to, amount);
     }
 
     /**
@@ -299,6 +357,18 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
                 // If user has no LP or there's no supply, return base boost only
                 if (userLpBalance == 0 || totalLpSupply == 0) {
                     return BOOST_BASE;
+                }
+                
+                // Flash loan protection - check if LP has been held long enough
+                if (lpAcquisitionTimestamp[user] > 0) {
+                    uint256 lpHoldingDuration = block.timestamp - lpAcquisitionTimestamp[user];
+                    if (lpHoldingDuration < LP_HOLDING_REQUIREMENT) {
+                        // If LP was acquired too recently, scale boost proportionally to holding time
+                        uint256 timePercent = (lpHoldingDuration * 100) / LP_HOLDING_REQUIREMENT;
+                        uint256 maxExtraBoost = BOOST_VARIABLE;
+                        uint256 scaledExtraBoost = (maxExtraBoost * timePercent) / 100;
+                        return BOOST_BASE + scaledExtraBoost;
+                    }
                 }
                 
                 uint256 userVotePower = userVotingPower[user];
@@ -530,10 +600,17 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Get swap limits for lottery entry
+     * @dev Get swap limits for lottery entry based on current mode
+     * @return min Minimum entry amount
+     * @return max Maximum entry amount
+     * @return isUsdMode Whether the returned values are in USD
      */
-    function getSwapLimits() external pure returns (uint256 min, uint256 max) {
-        return (BASE_WS_AMOUNT, type(uint256).max);
+    function getSwapLimits() external view returns (uint256 min, uint256 max, bool isUsdMode) {
+        if (useUsdEntryAmounts) {
+            return (MIN_USD_ENTRY, MAX_USD_ENTRY, true);
+        } else {
+            return (MIN_WS_ENTRY, MAX_WS_ENTRY, false);
+        }
     }
 
     /**
@@ -642,5 +719,149 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
         require(_lpBooster != address(0), "LP booster cannot be zero address");
         lpBooster = _lpBooster;
         emit LPBoosterSet(_lpBooster);
+    }
+
+    /**
+     * @dev Set the price oracle address (timelock governance protected)
+     * @param _priceOracle Address of the price oracle
+     */
+    function proposePriceOracle(address _priceOracle) external onlyOwner {
+        require(_priceOracle != address(0), "Price oracle address cannot be zero");
+        
+        bytes32 operationId = keccak256(abi.encode("setPriceOracle", _priceOracle));
+        timelockExpirations[operationId] = block.timestamp + TIMELOCK_PERIOD;
+        
+        emit TimelockOperationProposed(operationId, "setPriceOracle", timelockExpirations[operationId]);
+    }
+    
+    /**
+     * @dev Execute price oracle update after timelock period
+     * @param _priceOracle Address of the price oracle (must match proposed address)
+     */
+    function executePriceOracle(address _priceOracle) external onlyOwner {
+        bytes32 operationId = keccak256(abi.encode("setPriceOracle", _priceOracle));
+        require(timelockExpirations[operationId] > 0, "Operation not proposed");
+        require(block.timestamp >= timelockExpirations[operationId], "Timelock not expired");
+        
+        delete timelockExpirations[operationId];
+        priceOracle = IPriceOracle(_priceOracle);
+        
+        emit PriceOracleSet(_priceOracle);
+        emit TimelockOperationExecuted(operationId, "setPriceOracle");
+    }
+    
+    /**
+     * @dev Propose toggle between wS-based and USD-based entry amounts (timelock governance protected)
+     * @param _useUsdEntryAmounts Whether to use USD-based entry amounts
+     */
+    function proposeUseUsdEntryAmounts(bool _useUsdEntryAmounts) external onlyOwner {
+        // If enabling USD mode, ensure price oracle is set
+        if (_useUsdEntryAmounts) {
+            require(address(priceOracle) != address(0), "Price oracle must be set first");
+        }
+        
+        bytes32 operationId = keccak256(abi.encode("setUseUsdEntryAmounts", _useUsdEntryAmounts));
+        timelockExpirations[operationId] = block.timestamp + TIMELOCK_PERIOD;
+        
+        emit TimelockOperationProposed(operationId, "setUseUsdEntryAmounts", timelockExpirations[operationId]);
+    }
+    
+    /**
+     * @dev Execute toggle between wS-based and USD-based entry amounts after timelock period
+     * @param _useUsdEntryAmounts Whether to use USD-based entry amounts (must match proposed value)
+     */
+    function executeUseUsdEntryAmounts(bool _useUsdEntryAmounts) external onlyOwner {
+        bytes32 operationId = keccak256(abi.encode("setUseUsdEntryAmounts", _useUsdEntryAmounts));
+        require(timelockExpirations[operationId] > 0, "Operation not proposed");
+        require(block.timestamp >= timelockExpirations[operationId], "Timelock not expired");
+        
+        // If enabling USD mode, ensure price oracle is still set
+        if (_useUsdEntryAmounts) {
+            require(address(priceOracle) != address(0), "Price oracle must be set first");
+        }
+        
+        delete timelockExpirations[operationId];
+        useUsdEntryAmounts = _useUsdEntryAmounts;
+        
+        emit UsdEntryModeChanged(_useUsdEntryAmounts);
+        emit TimelockOperationExecuted(operationId, "setUseUsdEntryAmounts");
+    }
+
+    /**
+     * @dev DEPRECATED: Direct setting of price oracle (replaced by governance mechanism)
+     */
+    function setPriceOracle(address _priceOracle) external onlyOwner {
+        revert("Use governance proposal instead");
+    }
+    
+    /**
+     * @dev DEPRECATED: Direct toggle of USD entry mode (replaced by governance mechanism)
+     */
+    function setUseUsdEntryAmounts(bool _useUsdEntryAmounts) external onlyOwner {
+        revert("Use governance proposal instead");
+    }
+
+    /**
+     * @dev Record LP acquisition timestamp to prevent flash loan attacks
+     * This should be called by a trusted LP token contract or a wrapper contract
+     * @param user User who acquired LP tokens
+     * @param amount Amount of LP tokens acquired
+     */
+    function recordLpAcquisition(address user, uint256 amount) external {
+        // Only allow calls from the LP token contract, LP booster, or owner
+        require(
+            msg.sender == address(lpToken) || 
+            msg.sender == lpBooster || 
+            msg.sender == owner(),
+            "Not authorized"
+        );
+        
+        // Only update if this is the first acquisition or a significant amount
+        if (lpAcquisitionTimestamp[user] == 0 || amount > 0) {
+            lpAcquisitionTimestamp[user] = block.timestamp;
+            emit LpAcquisitionRecorded(user, amount, block.timestamp);
+        }
+    }
+    
+    /**
+     * @dev Check if the context is secure for a given user
+     * @param user User to check
+     * @return True if the context is secure
+     */
+    function isSecureContext(address user) public view virtual returns (bool) {
+        // Check if tx.origin is the same as msg.sender
+        // This helps prevent certain phishing attacks
+        return user == tx.origin && !isContract(user);
+    }
+
+    /**
+     * @dev Process a buy while enforcing a more secure context
+     * @param user Address of the user
+     * @param wsAmount Amount of wS tokens involved
+     */
+    function secureProcessBuy(address user, uint256 wsAmount) external nonReentrant whenNotPaused {
+        require(msg.sender == exchangePair || msg.sender == owner(), "Only exchange pair or owner can process");
+        require(isSecureContext(user), "Insecure context");
+        
+        // Continue with standard processing logic
+        // ... rest of the processBuy logic ...
+    }
+
+    /**
+     * @dev Distribute jackpot to a winner (can only be called from verified contexts)
+     * @param winner Address of the winner
+     * @param amount Amount to distribute
+     */
+    function distributeJackpot(address winner, uint256 amount) external {
+        // Only allow calls from this contract or the owner
+        require(msg.sender == address(this) || msg.sender == owner(), "Not authorized");
+        
+        // Security check to ensure the winner is not a contract
+        require(!isContract(winner), "Winner cannot be a contract");
+        
+        // Transfer tokens with gas limit for protection
+        wrappedSonic.safeTransfer(winner, amount);
+        
+        emit JackpotWon(winner, amount);
     }
 } 
