@@ -10,10 +10,11 @@ A comprehensive DeFi ecosystem on the Sonic network featuring the RedDragon toke
 4. [Contract Addresses](#contract-addresses)
 5. [Security Features](#security-features)
 6. [ve(80/20) System](#ve8020-system)
-7. [Lottery System](#lottery-system)
-8. [Deployment Scripts](#deployment-scripts)
-9. [Development Guide](#development-guide)
-10. [Support](#support)
+7. [Combined Fee Distributor](#combined-fee-distributor)
+8. [Lottery System](#lottery-system)
+9. [Deployment Scripts](#deployment-scripts)
+10. [Development Guide](#development-guide)
+11. [Support](#support)
 
 ## System Overview
 
@@ -39,6 +40,7 @@ RedDragon Token ──► Fee Manager ──┬─► ve8020 System ──► Fe
 - **RedDragonSwapLottery**: Probability-based lottery system with VRF randomness
 - **ve8020**: Vote-escrowed system for locking LP tokens
 - **Ve8020FeeDistributor**: Distributes fees to ve8020 holders
+- **CombinedVe8020FeeDistributor**: Enhanced fee distributor that handles rewards, liquidity management, and development funding in a single contract
 - **RedDragonVerifier**: Integrates with PaintSwap verifier for secure randomness
 - **RedDragonPaintSwapVerifier**: Connects to VRF Coordinator for verified randomness
 
@@ -67,6 +69,7 @@ RedDragon Token ──► Fee Manager ──┬─► ve8020 System ──► Fe
 - **RedDragonLPBooster**: `0x2A60ffcBf83877f18Bc7fEF9790e2598918AfCA4`
 - **ve8020**: `0x2ca4fBAC6326C23F7D2d48f465221EA316773b1a`
 - **Ve8020FeeDistributor**: `0xb9200A42789B2bae732F8654d125418b0A52639C`
+- **CombinedVe8020FeeDistributor**: `0xA7E8f794b2f93C7B3ed33c7614Acc6D4b440E81A`
 - **RedDragonFeeManager**: `0x9420C03f473a3E4fD335A31f6bB39fDE18E42A8E`
 - **RedDragonMultiSig**: `0x03bF2b1eC635783c88aD880D85F0c8c689EE962C` 
 - **LP Token**: `0xc59944C9AFe9eA9c87b21dBb3D753c5D1ccCF978`
@@ -122,6 +125,37 @@ The ve(80/20) system incentivizes long-term liquidity provision by allowing user
    - Transaction fee sharing through Ve8020FeeDistributor
    - Boosted chances to win lottery jackpots
 
+## Combined Fee Distributor
+
+The CombinedVe8020FeeDistributor is an enhanced version of the fee distribution system that consolidates multiple functionalities into a single contract:
+
+### Key Features
+
+1. **Unified Fee Management**:
+   - Handles rewards distribution to ve8020 holders
+   - Manages liquidity addition to DEX
+   - Controls development fund allocations
+
+2. **Epoch-Based Rewards**:
+   - Distributes rewards based on weekly epochs
+   - Users claim rewards proportional to their voting power
+   - Automatically tracks and updates epochs
+
+3. **Automated Liquidity Addition**:
+   - Accumulates tokens for liquidity until threshold is reached
+   - Automatically adds liquidity to DEX pairs
+   - Configurable frequency and minimum thresholds
+
+4. **Development Budget System**:
+   - Structured budget creation and management
+   - Authorization controls for spending
+   - Transparent tracking of all development funds
+
+5. **Administrative Controls**:
+   - Emergency withdrawal capabilities
+   - Budget creation and management
+   - Statistics tracking for all fund flows
+
 ## Lottery System
 
 ### Overview
@@ -156,6 +190,7 @@ This repository contains scripts for deploying and managing the RedDragon ecosys
 - `deploy-verifier.js`: Deploys the RedDragon verifier for secure randomness
 - `deploy-security-contracts.js`: Deploys additional security-related contracts
 - `deploy-ve8020.js`: Deploys the ve8020 token and related components
+- `deploy-combined-ve8020-distributor.js`: Deploys the enhanced fee distributor
 
 ### Verification Scripts
 - `verify-all-contracts.js`: Verifies all contracts on the block explorer
@@ -167,6 +202,7 @@ This repository contains scripts for deploying and managing the RedDragon ecosys
 - `update-fee-manager.js`: Updates fee manager configuration
 - `update-lottery.js`: Updates lottery settings
 - `update-verifiers.js`: Updates verifier settings
+- `update-to-combined-distributor.js`: Updates system to use the enhanced fee distributor
 
 ### Recovery Scripts
 - `reddragon-deployment-recovery.js`: Handles recovery of deployed contracts in case of issues
@@ -218,4 +254,4 @@ npx hardhat test
 For assistance with deployment or contract inquiries, please reach out via:
 - GitHub Issues
 - Twitter: [@sonicreddragon](https://x.com/sonicreddragon)
-- Telegram: [sonicreddragon](https://t.me/sonicreddragon) 
+- Telegram: [sonicreddragon](https://t.me/sonicreddragon)
