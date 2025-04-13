@@ -37,31 +37,27 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     uint256 public constant FEE_DENOMINATOR = 10000;
     
     // Buy Fees
-    uint256 public liquidityFeeBuy = 150;  // 1.5% = 150 basis points
     uint256 public jackpotFeeBuy = 690;    // 6.9% = 690 basis points
-    uint256 public burnFeeBuy = 69;       // 0.69% = 69 basis points
-    uint256 public developmentFeeBuy = 91; // 0.91% = 91 basis points
+    uint256 public burnFeeBuy = 69;        // 0.69% = 69 basis points
+    uint256 public ve8020FeeBuy = 241;     // 2.41% = 241 basis points (combined liquidity and development)
     uint256 public totalFeeBuy = 1000;     // 10% = 1000 basis points
 
     // Sell Fees
-    uint256 public liquidityFeeSell = 150;  // 1.5% = 150 basis points
-    uint256 public jackpotFeeSell = 690;    // 6.9% = 690 basis points
+    uint256 public jackpotFeeSell = 690;   // 6.9% = 690 basis points
     uint256 public burnFeeSell = 69;       // 0.69% = 69 basis points
-    uint256 public developmentFeeSell = 91; // 0.91% = 91 basis points
-    uint256 public totalFeeSell = 1000;     // 10% = 1000 basis points
+    uint256 public ve8020FeeSell = 241;    // 2.41% = 241 basis points (combined liquidity and development)
+    uint256 public totalFeeSell = 1000;    // 10% = 1000 basis points
 
     // Regular Fees
-    uint256 public liquidityFeeRegular = 150; // 1.5% = 150 basis points
     uint256 public jackpotFeeRegular = 690; // 6.9% = 690 basis points
-    uint256 public burnFeeRegular = 69; // 0.69% = 69 basis points
-    uint256 public developmentFeeRegular = 91; // 0.91% = 91 basis points
-    uint256 public totalFeeRegular = 1000; // 10% = 1000 basis points
+    uint256 public burnFeeRegular = 69;     // 0.69% = 69 basis points
+    uint256 public ve8020FeeRegular = 241;  // 2.41% = 241 basis points (combined liquidity and development)
+    uint256 public totalFeeRegular = 1000;  // 10% = 1000 basis points
 
     // Current active fees
-    uint256 public liquidityFee;
     uint256 public jackpotFee;
     uint256 public burnFee;
-    uint256 public developmentFee;
+    uint256 public ve8020Fee;
     uint256 public totalFee;
     
     // Supply and limits
@@ -90,9 +86,8 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     
     // Addresses
     address public immutable jackpotAddress;
-    address public immutable liquidityAddress;
+    address public immutable ve8020Address; // Combined liquidity and development address (fe8020FeeDistributor)
     address public immutable burnAddress;
-    address public immutable developmentAddress;
     address public immutable wrappedSonicAddress;
 
     // Interfaces
@@ -129,8 +124,7 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     // Token stats for transparency
     uint256 public totalBurned;
     uint256 public totalJackpotFees;
-    uint256 public totalLiquidityFees;
-    uint256 public totalDevelopmentFees;
+    uint256 public totalVe8020Fees;
     uint256 public launchTimestamp;
     
     // Holder tracking
@@ -149,21 +143,18 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
      */
     constructor(
         address _jackpotAddress,
-        address _liquidityAddress,
+        address _ve8020Address,
         address _burnAddress,
-        address _developmentAddress,
         address _wrappedSonicAddress
     ) ERC20("Red Dragon", "DRAGON") {
         require(_jackpotAddress != address(0), "Jackpot address cannot be zero");
-        require(_liquidityAddress != address(0), "Liquidity address cannot be zero");
+        require(_ve8020Address != address(0), "Ve8020 address cannot be zero");
         require(_burnAddress != address(0), "Burn address cannot be zero");
-        require(_developmentAddress != address(0), "Development address cannot be zero");
         require(_wrappedSonicAddress != address(0), "Wrapped Sonic address cannot be zero");
 
         jackpotAddress = _jackpotAddress;
-        liquidityAddress = _liquidityAddress;
+        ve8020Address = _ve8020Address;
         burnAddress = _burnAddress;
-        developmentAddress = _developmentAddress;
         wrappedSonicAddress = _wrappedSonicAddress;
         wrappedSonic = IERC20(_wrappedSonicAddress);
 
@@ -211,9 +202,8 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
 
         // Calculate fee distribution based on total fee percentages
         uint256 jackpotShare = (tokenBalance * jackpotFee) / totalFee;
-        uint256 liquidityShare = (tokenBalance * liquidityFee) / totalFee;
         uint256 burnShare = (tokenBalance * burnFee) / totalFee;
-        uint256 developmentShare = tokenBalance - jackpotShare - liquidityShare - burnShare;
+        uint256 ve8020Share = tokenBalance - jackpotShare - burnShare;
 
         // Transfer fees to receivers and track distributions
         if (jackpotShare > 0) {
@@ -223,17 +213,13 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
                 try IRedDragonSwapLottery(lotteryAddress).addToJackpot(jackpotShare) {} catch {}
             }
         }
-        if (liquidityShare > 0) {
-            super._transfer(address(this), liquidityAddress, liquidityShare);
-            _trackFeeDistribution(2, liquidityShare);
+        if (ve8020Share > 0) {
+            super._transfer(address(this), ve8020Address, ve8020Share);
+            _trackFeeDistribution(2, ve8020Share);
         }
         if (burnShare > 0) {
             super._transfer(address(this), burnAddress, burnShare);
             _trackFeeDistribution(3, burnShare);
-        }
-        if (developmentShare > 0) {
-            super._transfer(address(this), developmentAddress, developmentShare);
-            _trackFeeDistribution(4, developmentShare);
         }
         
         emit FeesDistributed(tokenBalance);
@@ -350,45 +336,47 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     function _distributeFees(uint256 feeAmount) internal {
         // Calculate fee distribution
         uint256 jackpotShare = (feeAmount * jackpotFee) / totalFee;
-        uint256 liquidityShare = (feeAmount * liquidityFee) / totalFee;
         uint256 burnShare = (feeAmount * burnFee) / totalFee;
-        uint256 developmentShare = feeAmount - jackpotShare - liquidityShare - burnShare;
+        uint256 ve8020Share = feeAmount - jackpotShare - burnShare;
 
         // Distribute fees
         if (jackpotShare > 0) {
             super._transfer(address(this), jackpotAddress, jackpotShare);
+            _trackFeeDistribution(1, jackpotShare);
             if (lotteryAddress != address(0)) {
                 try IRedDragonSwapLottery(lotteryAddress).addToJackpot(jackpotShare) {} catch {}
             }
         }
-        if (liquidityShare > 0) super._transfer(address(this), liquidityAddress, liquidityShare);
-        if (burnShare > 0) super._transfer(address(this), burnAddress, burnShare);
-        if (developmentShare > 0) super._transfer(address(this), developmentAddress, developmentShare);
+        if (ve8020Share > 0) {
+            super._transfer(address(this), ve8020Address, ve8020Share);
+            _trackFeeDistribution(2, ve8020Share);
+        }
+        if (burnShare > 0) {
+            super._transfer(address(this), burnAddress, burnShare);
+            _trackFeeDistribution(3, burnShare);
+        }
 
         emit FeesDistributed(feeAmount);
     }
 
     function buyFees() internal {
-        liquidityFee = liquidityFeeBuy;
         jackpotFee = jackpotFeeBuy;
         burnFee = burnFeeBuy;
-        developmentFee = developmentFeeBuy;
+        ve8020Fee = ve8020FeeBuy;
         totalFee = totalFeeBuy;
     }
 
     function sellFees() internal {
-        liquidityFee = liquidityFeeSell;
         jackpotFee = jackpotFeeSell;
         burnFee = burnFeeSell;
-        developmentFee = developmentFeeSell;
+        ve8020Fee = ve8020FeeSell;
         totalFee = totalFeeSell;
     }
 
     function regularFees() internal {
-        liquidityFee = liquidityFeeRegular;
         jackpotFee = jackpotFeeRegular;
         burnFee = burnFeeRegular;
-        developmentFee = developmentFeeRegular;
+        ve8020Fee = ve8020FeeRegular;
         totalFee = totalFeeRegular;
     }
 
@@ -398,48 +386,42 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
 
     // Admin functions to update fees
     function setBuyFees(
-        uint256 _liquidityFee,
         uint256 _jackpotFee,
         uint256 _burnFee,
-        uint256 _developmentFee
+        uint256 _ve8020Fee
     ) external onlyOwner {
         require(block.timestamp >= lastFeeUpdate + FEE_UPDATE_DELAY, "Fee update too soon");
-        require(_liquidityFee <= 300, "Liquidity fee too high");
         require(_jackpotFee <= 500, "Jackpot fee too high");
         require(_burnFee <= 100, "Burn fee too high");
-        require(_developmentFee <= 100, "Development fee too high");
+        require(_ve8020Fee <= 100, "Ve8020 fee too high");
         
-        uint256 newTotalFee = _liquidityFee + _jackpotFee + _burnFee + _developmentFee;
+        uint256 newTotalFee = _jackpotFee + _burnFee + _ve8020Fee;
         require(newTotalFee <= 1000, "Total fee too high");
         
-        liquidityFeeBuy = _liquidityFee;
         jackpotFeeBuy = _jackpotFee;
         burnFeeBuy = _burnFee;
-        developmentFeeBuy = _developmentFee;
+        ve8020FeeBuy = _ve8020Fee;
         totalFeeBuy = newTotalFee;
         
         lastFeeUpdate = block.timestamp;
     }
 
     function setSellFees(
-        uint256 _liquidityFee,
         uint256 _jackpotFee,
         uint256 _burnFee,
-        uint256 _developmentFee
+        uint256 _ve8020Fee
     ) external onlyOwner {
         require(block.timestamp >= lastFeeUpdate + FEE_UPDATE_DELAY, "Fee update too soon");
-        require(_liquidityFee <= 300, "Liquidity fee too high");
         require(_jackpotFee <= 500, "Jackpot fee too high");
         require(_burnFee <= 100, "Burn fee too high");
-        require(_developmentFee <= 100, "Development fee too high");
+        require(_ve8020Fee <= 100, "Ve8020 fee too high");
         
-        uint256 newTotalFee = _liquidityFee + _jackpotFee + _burnFee + _developmentFee;
+        uint256 newTotalFee = _jackpotFee + _burnFee + _ve8020Fee;
         require(newTotalFee <= 1000, "Total fee too high");
         
-        liquidityFeeSell = _liquidityFee;
         jackpotFeeSell = _jackpotFee;
         burnFeeSell = _burnFee;
-        developmentFeeSell = _developmentFee;
+        ve8020FeeSell = _ve8020Fee;
         totalFeeSell = newTotalFee;
         
         lastFeeUpdate = block.timestamp;
@@ -724,39 +706,33 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     
     /**
      * @dev Get detailed fee information for transparency
-     * @return liquidityFeeBuy_ Current buy liquidity fee
      * @return jackpotFeeBuy_ Current buy jackpot fee
      * @return burnFeeBuy_ Current buy burn fee
-     * @return developmentFeeBuy_ Current buy development fee
+     * @return ve8020FeeBuy_ Current buy ve8020 fee
      * @return totalFeeBuy_ Total buy fee
-     * @return liquidityFeeSell_ Current sell liquidity fee
      * @return jackpotFeeSell_ Current sell jackpot fee
      * @return burnFeeSell_ Current sell burn fee
-     * @return developmentFeeSell_ Current sell development fee
+     * @return ve8020FeeSell_ Current sell ve8020 fee
      * @return totalFeeSell_ Total sell fee
      */
     function getDetailedFeeInfo() external view returns (
-        uint256 liquidityFeeBuy_,
         uint256 jackpotFeeBuy_,
         uint256 burnFeeBuy_,
-        uint256 developmentFeeBuy_,
+        uint256 ve8020FeeBuy_,
         uint256 totalFeeBuy_,
-        uint256 liquidityFeeSell_,
         uint256 jackpotFeeSell_,
         uint256 burnFeeSell_,
-        uint256 developmentFeeSell_,
+        uint256 ve8020FeeSell_,
         uint256 totalFeeSell_
     ) {
         return (
-            liquidityFeeBuy,
             jackpotFeeBuy,
             burnFeeBuy,
-            developmentFeeBuy,
+            ve8020FeeBuy,
             totalFeeBuy,
-            liquidityFeeSell,
             jackpotFeeSell,
             burnFeeSell,
-            developmentFeeSell,
+            ve8020FeeSell,
             totalFeeSell
         );
     }
@@ -764,9 +740,8 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Get detailed contract configuration for transparency
      * @return jackpotAddress_ Address receiving jackpot fees
-     * @return liquidityAddress_ Address receiving liquidity fees
+     * @return ve8020Address_ Address receiving liquidity and development fees
      * @return burnAddress_ Address receiving burn fees
-     * @return developmentAddress_ Address receiving development fees
      * @return wrappedSonicAddress_ Address of wrapped Sonic token
      * @return lotteryAddress_ Address of lottery contract
      * @return exchangePair_ Address of exchange pair
@@ -775,9 +750,8 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
      */
     function getContractConfiguration() external view returns (
         address jackpotAddress_,
-        address liquidityAddress_,
+        address ve8020Address_,
         address burnAddress_,
-        address developmentAddress_,
         address wrappedSonicAddress_,
         address lotteryAddress_,
         address exchangePair_,
@@ -786,9 +760,8 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     ) {
         return (
             jackpotAddress,
-            liquidityAddress,
+            ve8020Address,
             burnAddress,
-            developmentAddress,
             wrappedSonicAddress,
             lotteryAddress,
             exchangePair,
@@ -827,11 +800,9 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
         if (feeType == 1) {
             totalJackpotFees += amount;
         } else if (feeType == 2) {
-            totalLiquidityFees += amount;
+            totalVe8020Fees += amount;
         } else if (feeType == 3) {
             totalBurned += amount;
-        } else if (feeType == 4) {
-            totalDevelopmentFees += amount;
         }
     }
     
@@ -839,20 +810,17 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Get statistics about fee distributions
      * @return totalBurned_ Total tokens burned
      * @return totalJackpotFees_ Total tokens sent to jackpot
-     * @return totalLiquidityFees_ Total tokens sent to liquidity
-     * @return totalDevelopmentFees_ Total tokens sent to development
+     * @return totalVe8020Fees_ Total tokens sent to liquidity and development
      */
     function getFeeStats() external view returns (
         uint256 totalBurned_,
         uint256 totalJackpotFees_,
-        uint256 totalLiquidityFees_,
-        uint256 totalDevelopmentFees_
+        uint256 totalVe8020Fees_
     ) {
         return (
             totalBurned,
             totalJackpotFees,
-            totalLiquidityFees,
-            totalDevelopmentFees
+            totalVe8020Fees
         );
     }
     
