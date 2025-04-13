@@ -129,6 +129,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
     event PriceOracleSet(address indexed oracleAddress);
     event UsdEntryModeChanged(bool useUsdMode);
     event LpAcquisitionRecorded(address indexed user, uint256 amount, uint256 timestamp);
+    event JackpotTransferred(address indexed to, uint256 amount);
 
     /**
      * @dev Circuit breaker modifier
@@ -166,7 +167,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
         // Double verify the user parameter matches tx.origin to prevent intermediaries
         require(user == actualTrader, "User must be original sender");
         require(actualTrader != address(0), "Invalid trader address");
-        require(!isContract(actualTrader), "Contracts cannot participate");
+        require(actualTrader.code.length == 0, "Contracts cannot participate");
         
         // Check if amount is within limits based on current mode
         if (useUsdEntryAmounts) {
@@ -223,7 +224,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
         require(request.user != address(0), "Request not found");
         
         // Verify user is still a valid EOA and not a contract
-        require(!isContract(request.user), "Winner cannot be a contract");
+        require(request.user.code.length == 0, "Winner cannot be a contract");
 
         emit RandomnessReceived(requestId, randomWords[0]);
 
@@ -244,8 +245,8 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
             lastWinTimestamp = block.timestamp;
             emit PityBoostReset();
             
-            // Verify winner is not a contract for additional security
-            require(!isContract(request.user), "Winner cannot be a contract");
+            // Verify winner is not a contract for additional security (redundant but important check)
+            require(request.user.code.length == 0, "Winner cannot be a contract");
             
             // Transfer tokens directly to winner
             wrappedSonic.safeTransfer(request.user, winAmount);
@@ -285,11 +286,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
      * @return bool True if the address is a contract
      */
     function isContract(address account) internal view returns (bool) {
-        uint256 size;
-        assembly {
-            size := extcodesize(account)
-        }
-        return size > 0;
+        return account.code.length > 0;
     }
 
     /**
@@ -829,9 +826,9 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
      * @return True if the context is secure
      */
     function isSecureContext(address user) public view virtual returns (bool) {
-        // Check if tx.origin is the same as msg.sender
-        // This helps prevent certain phishing attacks
-        return user == tx.origin && !isContract(user);
+        // Check if tx.origin is the same as the provided user address
+        // This helps prevent certain phishing attacks and proxies
+        return user == tx.origin && tx.origin.code.length == 0;
     }
 
     /**
@@ -857,11 +854,29 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
         require(msg.sender == address(this) || msg.sender == owner(), "Not authorized");
         
         // Security check to ensure the winner is not a contract
-        require(!isContract(winner), "Winner cannot be a contract");
+        require(winner.code.length == 0, "Winner cannot be a contract");
         
         // Transfer tokens with gas limit for protection
         wrappedSonic.safeTransfer(winner, amount);
         
         emit JackpotWon(winner, amount);
+    }
+    
+    /**
+     * @dev Transfer jackpot to a specified address (only owner can call)
+     * Used for migration to upgraded contracts
+     * @param to Recipient address
+     * @param amount Amount to transfer
+     */
+    function transferJackpotTo(address to, uint256 amount) external onlyOwner {
+        require(amount <= jackpot, "Amount exceeds jackpot");
+        
+        // Update state before transfer (reentrancy protection)
+        jackpot -= amount;
+        
+        // Transfer tokens to recipient
+        wrappedSonic.safeTransfer(to, amount);
+        
+        emit JackpotTransferred(to, amount);
     }
 } 
