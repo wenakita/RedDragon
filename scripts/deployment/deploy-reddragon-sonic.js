@@ -19,8 +19,8 @@ async function main() {
     );
     
     // Wait for deployment to complete
-    await redDragon.waitForDeployment();
-    const redDragonAddress = await redDragon.getAddress();
+    await redDragon.deployed();
+    const redDragonAddress = redDragon.address;
     console.log("✅ RedDragon Token deployed to:", redDragonAddress);
 
     // Deploy PaintSwap Verifier
@@ -29,21 +29,21 @@ async function main() {
     const verifier = await RedDragonPaintSwapVerifier.deploy();
     
     // Wait for deployment to complete
-    await verifier.waitForDeployment();
-    const verifierAddress = await verifier.getAddress();
+    await verifier.deployed();
+    const verifierAddress = verifier.address;
     console.log("✅ PaintSwap Verifier deployed to:", verifierAddress);
 
     // Deploy PaintSwap Lottery
     console.log("\n📦 3. Deploying PaintSwap Lottery...");
     const RedDragonPaintSwap = await hre.ethers.getContractFactory("RedDragonSwapLottery");
     const lottery = await RedDragonPaintSwap.deploy(
-        process.env.WRAPPED_SONIC_ADDRESS, // wS address
+        process.env.WRAPPED_SONIC_ADDRESS || "0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38", // wS address
         verifierAddress                     // verifier address
     );
     
     // Wait for deployment to complete
-    await lottery.waitForDeployment();
-    const lotteryAddress = await lottery.getAddress();
+    await lottery.deployed();
+    const lotteryAddress = lottery.address;
     console.log("✅ PaintSwap Lottery deployed to:", lotteryAddress);
 
     // Set lottery address in token

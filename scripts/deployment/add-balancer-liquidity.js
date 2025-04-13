@@ -1,18 +1,19 @@
 const hre = require("hardhat");
-const { parseUnits, formatUnits } = require("ethers");
 const fs = require('fs');
 require("dotenv").config();
 
 /**
- * Add initial liquidity to the 80/20 Balancer/Beets pool
+ * Add initial liquidity to the Balancer 80/20 pool
  */
 async function main() {
-  console.log("🚀 Adding initial liquidity to 80/20 Balancer/Beets pool...");
+  console.log("🚀 Adding initial liquidity to Balancer 80/20 pool...");
 
   try {
     // Get deployer account
     const [deployer] = await hre.ethers.getSigners();
     console.log("📝 Using account:", deployer.address);
+    const deployerBalance = await deployer.provider.getBalance(deployer.address);
+    console.log("💰 Account balance:", hre.ethers.utils.formatEther(deployerBalance), "wS");
 
     // Load deployment addresses
     const deploymentFile = "deployment-addresses-sonic.json";
@@ -23,115 +24,150 @@ async function main() {
         addresses = JSON.parse(fs.readFileSync(deploymentFile));
         console.log("📝 Loaded existing deployment addresses");
       } else {
-        console.error("❌ No deployment addresses file found. Run create-balancer-pool.js first.");
-        process.exit(1);
+        console.error("❌ No deployment addresses file found");
+        return;
       }
     } catch (error) {
-      console.error("❌ Error reading deployment addresses:", error.message);
-      process.exit(1);
+      console.error("❌ Error loading deployment addresses:", error);
+      return;
     }
-
-    // Verify we have the necessary addresses
-    if (!addresses.redDragon) {
-      console.error("❌ RedDragon token address not found");
-      process.exit(1);
-    }
-    if (!addresses.balancerIntegration) {
-      console.error("❌ BalancerIntegration address not found");
-      process.exit(1);
-    }
-    if (!addresses.lpToken) {
-      console.error("❌ LP token address not found");
-      process.exit(1);
-    }
-
-    // Get contract instances
-    const pairedTokenAddress = process.env.PAIRED_TOKEN_ADDRESS;
-    const redDragonAddress = addresses.redDragon;
-    const balancerIntegrationAddress = addresses.balancerIntegration;
     
-    // Create contract instances
-    const IERC20 = [
-      "function approve(address spender, uint256 amount) external returns (bool)",
-      "function balanceOf(address account) external view returns (uint256)",
-      "function transfer(address to, uint256 amount) external returns (bool)"
-    ];
+    // Check for required addresses
+    if (!addresses.redDragon || !addresses.wrappedSonic || !addresses.balancerPool || !addresses.balancerPoolId) {
+      console.error("❌ Missing required addresses in deployment file");
+      console.log("Required addresses: redDragon, wrappedSonic, balancerPool, balancerPoolId");
+      return;
+    }
 
-    const IBalancerIntegration = [
-      "function addInitialLiquidity(uint256 dragonAmount, uint256 pairedTokenAmount) external returns (uint256)",
-      "function addLiquidity(uint256 dragonAmount, uint256 pairedTokenAmount) external returns (uint256)",
-      "function poolAddress() external view returns (address)"
-    ];
+    // Connect to deployed contracts
+    const redDragon = await hre.ethers.getContractAt("RedDragon", addresses.redDragon);
+    const wrappedSonic = await hre.ethers.getContractAt("IERC20", addresses.wrappedSonic);
+    const balancerPool = await hre.ethers.getContractAt("IWeightedPool", addresses.balancerPool);
 
-    const dragonToken = new hre.ethers.Contract(redDragonAddress, IERC20, deployer);
-    const pairedToken = new hre.ethers.Contract(pairedTokenAddress, IERC20, deployer);
-    const balancerIntegration = new hre.ethers.Contract(balancerIntegrationAddress, IBalancerIntegration, deployer);
+    // Get Balancer Vault address
+    const balancerVaultAddress = process.env.BALANCER_VAULT_ADDRESS;
+    if (!balancerVaultAddress) {
+      console.error("❌ Balancer Vault address not found. Please set BALANCER_VAULT_ADDRESS in .env");
+      return;
+    }
+    console.log("📝 Balancer Vault address:", balancerVaultAddress);
 
-    // Calculate liquidity amounts (80% DRAGON, 20% wS)
-    // Adjust these values based on your tokenomics and available tokens
-    const dragonAmount = parseUnits("8000000", 18); // 8 million DRAGON tokens (80%)
-    const pairedAmount = parseUnits("2", 18);      // 2 wS (20%)
+    // Connect to Balancer Vault
+    const balancerVault = await hre.ethers.getContractAt("IVault", balancerVaultAddress);
+
+    // Get liquidity amounts from environment or prompt user
+    const redDragonAmount = process.env.INITIAL_REDDRAGON_LIQUIDITY 
+      ? hre.ethers.utils.parseEther(process.env.INITIAL_REDDRAGON_LIQUIDITY)
+      : hre.ethers.utils.parseEther("1000000"); // Default: 1M RedDragon
+    
+    const wSonicAmount = process.env.INITIAL_WSONIC_LIQUIDITY
+      ? hre.ethers.utils.parseEther(process.env.INITIAL_WSONIC_LIQUIDITY)
+      : hre.ethers.utils.parseEther("50000"); // Default: 50K wSonic
+    
+    console.log("\n📋 Liquidity Configuration:");
+    console.log("- RedDragon Amount:", hre.ethers.utils.formatEther(redDragonAmount), "RED");
+    console.log("- wSonic Amount:", hre.ethers.utils.formatEther(wSonicAmount), "wS");
 
     // Check balances
-    const dragonBalance = await dragonToken.balanceOf(deployer.address);
-    const pairedBalance = await pairedToken.balanceOf(deployer.address);
+    const redDragonBalance = await redDragon.balanceOf(deployer.address);
+    const wSonicBalance = await wrappedSonic.balanceOf(deployer.address);
 
-    console.log("\n📋 Token balances:");
-    console.log(`- DRAGON: ${formatUnits(dragonBalance, 18)} (need ${formatUnits(dragonAmount, 18)})`);
-    console.log(`- wS: ${formatUnits(pairedBalance, 18)} (need ${formatUnits(pairedAmount, 18)})`);
+    console.log("\n📋 Your Token Balances:");
+    console.log("- RedDragon Balance:", hre.ethers.utils.formatEther(redDragonBalance), "RED");
+    console.log("- wSonic Balance:", hre.ethers.utils.formatEther(wSonicBalance), "wS");
 
-    if (dragonBalance.lt(dragonAmount)) {
-      console.error("❌ Insufficient DRAGON token balance");
-      process.exit(1);
+    if (redDragonBalance.lt(redDragonAmount)) {
+      console.error(`❌ Insufficient RedDragon balance. Need ${hre.ethers.utils.formatEther(redDragonAmount)} RED`);
+      return;
     }
 
-    if (pairedBalance.lt(pairedAmount)) {
-      console.error("❌ Insufficient wS token balance");
-      process.exit(1);
+    if (wSonicBalance.lt(wSonicAmount)) {
+      console.error(`❌ Insufficient wSonic balance. Need ${hre.ethers.utils.formatEther(wSonicAmount)} wS`);
+      return;
     }
 
-    // Approve tokens for the BalancerIntegration contract
-    console.log("\n📦 Approving tokens...");
-    const approveRedDragonTx = await dragonToken.approve(balancerIntegrationAddress, dragonAmount);
-    await approveRedDragonTx.wait();
-    console.log("✅ DRAGON tokens approved");
-
-    const approvePairedTx = await pairedToken.approve(balancerIntegrationAddress, pairedAmount);
-    await approvePairedTx.wait();
-    console.log("✅ wS tokens approved");
-
-    // Add initial liquidity
-    console.log("\n📦 Adding initial liquidity...");
-    const addLiquidityTx = await balancerIntegration.addInitialLiquidity(dragonAmount, pairedAmount);
-    await addLiquidityTx.wait();
-    console.log("✅ Initial liquidity added successfully");
-
-    // Get pool address
-    const poolAddress = await balancerIntegration.poolAddress();
-    const poolToken = new hre.ethers.Contract(poolAddress, IERC20, deployer);
-    const lpBalance = await poolToken.balanceOf(deployer.address);
+    // Approve tokens to Balancer Vault
+    console.log("\n🔄 Approving tokens to Balancer Vault...");
     
-    console.log("\n📋 Liquidity summary:");
-    console.log(`- Pool address: ${poolAddress}`);
-    console.log(`- LP tokens received: ${formatUnits(lpBalance, 18)}`);
-    console.log(`- DRAGON tokens added: ${formatUnits(dragonAmount, 18)}`);
-    console.log(`- wS tokens added: ${formatUnits(pairedAmount, 18)}`);
-
-    console.log("\n🎉 Liquidity addition complete!");
+    console.log("Approving RedDragon...");
+    const redDragonApproveTx = await redDragon.approve(balancerVaultAddress, redDragonAmount);
+    await redDragonApproveTx.wait();
     
-    console.log("\n🔹 Next steps:");
-    console.log("1. Deploy ve8020 contract:");
-    console.log("   npx hardhat run scripts/deployment/deploy-ve8020.js --network sonic");
+    console.log("Approving wSonic...");
+    const wSonicApproveTx = await wrappedSonic.approve(balancerVaultAddress, wSonicAmount);
+    await wSonicApproveTx.wait();
+    
+    console.log("✅ Approvals completed");
 
+    // Prepare tokens and amounts for join
+    // Note: tokens must be sorted by address
+    const tokens = [addresses.redDragon, addresses.wrappedSonic].sort();
+    
+    // Determine token indexes
+    const redDragonIndex = tokens.indexOf(addresses.redDragon);
+    const wSonicIndex = tokens.indexOf(addresses.wrappedSonic);
+    
+    // Prepare amounts array based on token order
+    const amountsIn = Array(2).fill(0);
+    amountsIn[redDragonIndex] = redDragonAmount;
+    amountsIn[wSonicIndex] = wSonicAmount;
+    
+    // Prepare join transaction
+    const JOIN_KIND_INIT = 0; // Initialization of the pool
+    const userData = hre.ethers.utils.defaultAbiCoder.encode(
+      ['uint256', 'uint256[]'],
+      [JOIN_KIND_INIT, amountsIn]
+    );
+    
+    const joinPoolRequest = {
+      assets: tokens,
+      maxAmountsIn: amountsIn,
+      userData,
+      fromInternalBalance: false
+    };
+    
+    // Join pool
+    console.log("\n🔄 Adding liquidity to pool...");
+    const joinTx = await balancerVault.joinPool(
+      addresses.balancerPoolId,
+      deployer.address,
+      deployer.address,
+      joinPoolRequest
+    );
+    
+    console.log("Waiting for transaction to be mined...");
+    await joinTx.wait();
+    
+    console.log("✅ Liquidity added successfully!");
+    
+    // Get pool token balance
+    const bptBalance = await balancerPool.balanceOf(deployer.address);
+    console.log("\n📋 Your Pool Token Balance:", hre.ethers.utils.formatEther(bptBalance), "BPT");
+    
+    // Update LP token in deployment addresses if not already set
+    if (!addresses.lpToken) {
+      addresses.lpToken = addresses.balancerPool;
+      fs.writeFileSync(deploymentFile, JSON.stringify(addresses, null, 2));
+      console.log("📝 Updated lpToken in deployment file");
+    }
+    
+    console.log("\n⚠️ Next Steps:");
+    console.log("1. Run setup-liquidity.js to configure the LP token and exchange pair");
+    console.log("2. Deploy ve8020 (if not already deployed)");
+    console.log("3. Run transfer-ownership.js to transfer ownership to the multisig");
+    
+    console.log("\n🎉 Liquidity setup completed!");
+    
   } catch (error) {
-    console.error("❌ Error:", error);
-    process.exit(1);
+    console.error("❌ Setup failed:", error);
+    console.error(error.stack);
   }
 }
 
+// Execute the script
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error("❌ Script error:", error);
+    console.error(error);
     process.exit(1);
   }); 

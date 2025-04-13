@@ -1,0 +1,22 @@
+{
+  "redDragon": "",
+  "jackpotVault": "",
+  "liquidityVault": "",
+  "developmentVault": "",
+  "burnAddress": "0x000000000000000000000000000000000000dEaD",
+  "wrappedSonic": "0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38",
+  "router": "",
+  "factory": "",
+  "oldVerifier": "",
+  "verifier": "",
+  "paintSwapVerifier": "",
+  "lottery": "",
+  "lpToken": "",
+  "ve8020": "",
+  "ve8020FeeDistributor": "",
+  "feeManager": "",
+  "thankYouToken": "",
+  "oldThankYouToken": "",
+  "previousVerifier": "",
+  "oldPaintSwapVerifier": ""
+}

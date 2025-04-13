@@ -85,13 +85,13 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     mapping(address => bool) public isFeeExempt;
     
     // Addresses
-    address public immutable jackpotAddress;
-    address public immutable ve8020Address; // Combined liquidity and development address (fe8020FeeDistributor)
-    address public immutable burnAddress;
-    address public immutable wrappedSonicAddress;
+    address public jackpotAddress;
+    address public ve8020Address; // Combined liquidity and development address (fe8020FeeDistributor)
+    address public burnAddress;
+    address public wrappedSonicAddress;
 
     // Interfaces
-    IERC20 public immutable wrappedSonic;
+    IERC20 public wrappedSonic;
 
     // Transfer optimization
     bool private _transferOptimization = true;
@@ -108,6 +108,7 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     event ActionExecuted(bytes32 indexed actionId, string actionDescription);
     event ActionCancelled(bytes32 indexed actionId, string actionDescription);
     event OwnershipRenounced();
+    event Ve8020AddressUpdated(address indexed newAddress);
     
     // Fee update timelock
     uint256 public constant FEE_UPDATE_DELAY = 24 hours;
@@ -872,5 +873,15 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
      */
     function getHolderCount() external view returns (uint256) {
         return _holders.length();
+    }
+
+    /**
+     * @dev Sets the ve8020Address for the token
+     * @param _ve8020Address New address for the ve8020FeeDistributor
+     */
+    function setVe8020Address(address _ve8020Address) external onlyOwner {
+        require(_ve8020Address != address(0), "Ve8020 address cannot be zero");
+        ve8020Address = _ve8020Address;
+        emit Ve8020AddressUpdated(_ve8020Address);
     }
 }

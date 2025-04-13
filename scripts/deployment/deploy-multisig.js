@@ -20,9 +20,9 @@ async function main() {
     let addresses = JSON.parse(fs.readFileSync(deploymentFile, 'utf8'));
     
     // Set up owner addresses with proper checksums
-    const owner1 = deployer.address; // Already checksummed
-    const owner2 = ethers.getAddress("0xc57afdcb9b47bb7a2dc07c8ab8054e96c103fc6b");
-    const owner3 = ethers.getAddress("0x4B20993Bc481177ec7E8f571ceCaE8A9e22C02db");
+    const owner1 = process.env.MULTISIG_OWNER_1 || deployer.address;
+    const owner2 = process.env.MULTISIG_OWNER_2 || ethers.getAddress("0xB05Cf01231cF2fF99499682E64D3780d57c80FdD");
+    const owner3 = process.env.MULTISIG_OWNER_3 || ethers.getAddress("0xDDd0050d1E084dFc72d5d06447Cc10bcD3fEF60F");
     
     // Check for uniqueness
     if (owner1.toLowerCase() === owner2.toLowerCase() || 
@@ -48,8 +48,8 @@ async function main() {
       [owner1, owner2, owner3],
       requiredConfirmations
     );
-    await multiSig.waitForDeployment();
-    const multiSigAddress = await multiSig.getAddress();
+    await multiSig.deployed();
+    const multiSigAddress = multiSig.address;
     console.log("\n✅ RedDragonMultiSig deployed to:", multiSigAddress);
     
     // Save address to deployment file

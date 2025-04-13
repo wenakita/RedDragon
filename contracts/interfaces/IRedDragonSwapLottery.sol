@@ -1,8 +1,49 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+/**
+ * @dev Interface for RedDragonSwapLottery contract
+ */
 interface IRedDragonSwapLottery {
-    function processBuy(address user, uint256 amount) external;
+    /**
+     * @dev Processes a buy and checks for lottery win
+     * @param user Address of the user
+     * @param wsAmount Amount of wS tokens involved
+     */
+    function processBuy(address user, uint256 wsAmount) external;
+    
+    /**
+     * @dev Processes a sell transaction (potentially affecting global pity boost)
+     * @param user Address of the user
+     * @param wsAmount Amount of wS tokens involved
+     */
+    function processSell(address user, uint256 wsAmount) external;
+    
+    /**
+     * @dev Increases the jackpot by depositing wS tokens
+     * @param amount Amount of wS tokens to add to the jackpot
+     */
+    function increaseJackpot(uint256 amount) external;
+    
+    /**
+     * @dev Sets token's voting power in the lottery for boost calculation
+     * @param user User address
+     * @param votingPower Amount of voting power
+     */
+    function setUserVotingPower(address user, uint256 votingPower) external;
+    
+    /**
+     * @dev Gets the current jackpot size
+     * @return Current jackpot size in wS
+     */
+    function jackpot() external view returns (uint256);
+    
+    /**
+     * @dev Gets the current total accumulated boost
+     * @return Current accumulated boost percentage
+     */
+    function accumulatedWSBoost() external view returns (uint256);
+
     function secureProcessBuy(address user, uint256 amount) external;
     function addToJackpot(uint256 amount) external;
     function updateProbability(uint256 newProbability) external;

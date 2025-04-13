@@ -1,18 +1,20 @@
 const hre = require("hardhat");
-const { parseUnits, formatUnits } = require("ethers");
 const fs = require('fs');
 require("dotenv").config();
 
 /**
- * Create an 80/20 Balancer/Beets pool for DRAGON-wS
+ * Create a weighted 80/20 Balancer (Beethoven X) pool for RedDragon/wSonic
+ * This creates the LP that will be used for the ve8020 system and the lottery boost
  */
 async function main() {
-  console.log("🚀 Creating 80/20 Balancer/Beets pool for DRAGON-wS...");
+  console.log("🚀 Creating weighted 80/20 Balancer pool for RedDragon/wSonic...");
 
   try {
     // Get deployer account
     const [deployer] = await hre.ethers.getSigners();
     console.log("📝 Using account:", deployer.address);
+    const deployerBalance = await deployer.provider.getBalance(deployer.address);
+    console.log("💰 Account balance:", hre.ethers.utils.formatEther(deployerBalance), "wS");
 
     // Load deployment addresses
     const deploymentFile = "deployment-addresses-sonic.json";
@@ -23,100 +25,140 @@ async function main() {
         addresses = JSON.parse(fs.readFileSync(deploymentFile));
         console.log("📝 Loaded existing deployment addresses");
       } else {
-        console.error("❌ No deployment addresses file found. Run deploy-reddragon-sonic.js first.");
-        process.exit(1);
+        console.error("❌ No deployment addresses file found");
+        return;
       }
     } catch (error) {
-      console.error("❌ Error reading deployment addresses:", error.message);
-      process.exit(1);
+      console.error("❌ Error loading deployment addresses:", error);
+      return;
+    }
+    
+    // Check for required addresses
+    if (!addresses.redDragon || !addresses.wrappedSonic) {
+      console.error("❌ Missing required token addresses in deployment file");
+      console.log("Required addresses: redDragon, wrappedSonic");
+      return;
     }
 
-    // Get token addresses
-    const redDragonAddress = addresses.redDragon || process.env.RED_DRAGON_ADDRESS;
-    if (!redDragonAddress) {
-      console.error("❌ RedDragon token address not found");
-      process.exit(1);
-    }
+    // Connect to deployed contracts
+    const redDragon = await hre.ethers.getContractAt("RedDragon", addresses.redDragon);
+    const wrappedSonic = await hre.ethers.getContractAt("IERC20", addresses.wrappedSonic);
 
-    // Balancer/Beets specific addresses
+    // Get Balancer Vault address
     const balancerVaultAddress = process.env.BALANCER_VAULT_ADDRESS;
-    const weightedPoolFactoryAddress = process.env.BALANCER_WEIGHTED_POOL_FACTORY_ADDRESS;
-    const pairedTokenAddress = process.env.PAIRED_TOKEN_ADDRESS; // wS
+    if (!balancerVaultAddress) {
+      console.error("❌ Balancer Vault address not found. Please set BALANCER_VAULT_ADDRESS in .env");
+      return;
+    }
+    console.log("📝 Balancer Vault address:", balancerVaultAddress);
 
-    console.log("\n📋 Configuration:");
-    console.log("- RedDragon Token:", redDragonAddress);
-    console.log("- Paired Token (wS):", pairedTokenAddress);
-    console.log("- Balancer Vault:", balancerVaultAddress);
-    console.log("- Weighted Pool Factory:", weightedPoolFactoryAddress);
+    // Get Balancer Factory address
+    const balancerFactoryAddress = process.env.BALANCER_FACTORY_ADDRESS;
+    if (!balancerFactoryAddress) {
+      console.error("❌ Balancer Factory address not found. Please set BALANCER_FACTORY_ADDRESS in .env");
+      return;
+    }
+    console.log("📝 Balancer Factory address:", balancerFactoryAddress);
 
-    // Deploy RedDragonBalancerIntegration
-    console.log("\n📦 Deploying RedDragonBalancerIntegration...");
-    const RedDragonBalancerIntegration = await hre.ethers.getContractFactory("RedDragonBalancerIntegration");
+    // Connect to Balancer contracts
+    const balancerVault = await hre.ethers.getContractAt("IVault", balancerVaultAddress);
+    const weightedPoolFactory = await hre.ethers.getContractAt("IWeightedPoolFactory", balancerFactoryAddress);
+
+    // Check if pool already exists
+    if (addresses.balancerPool) {
+      console.log("⚠️ Balancer pool already exists at", addresses.balancerPool);
+      console.log("Skipping pool creation. To create a new pool, remove the balancerPool address from the deployment file.");
+      return;
+    }
+
+    // Configure pool parameters
+    const poolName = "RedDragon-wSonic 80/20";
+    const poolSymbol = "80RED-20wS";
+    const tokens = [
+      addresses.redDragon, // RedDragon
+      addresses.wrappedSonic   // wSonic
+    ].sort(); // Tokens must be sorted by address
+
+    // Sort index for tokens (important for Balancer)
+    const redDragonIndex = tokens.indexOf(addresses.redDragon);
+    const wSonicIndex = tokens.indexOf(addresses.wrappedSonic);
+
+    // Weights must sum to 1e18 (100%)
+    // 80% for RedDragon, 20% for wSonic
+    const weights = Array(2).fill(0);
+    weights[redDragonIndex] = hre.ethers.utils.parseEther("0.8"); // 80%
+    weights[wSonicIndex] = hre.ethers.utils.parseEther("0.2");    // 20%
+
+    // Set swap fee 0.3%
+    const swapFee = hre.ethers.utils.parseEther("0.003");
     
-    // First deploy LP Burner 
-    console.log("\n📦 Deploying RedDragonLPBurner...");
-    const RedDragonLPBurner = await hre.ethers.getContractFactory("RedDragonLPBurner");
-    const lpBurner = await RedDragonLPBurner.deploy(
-      process.env.JACKPOT_VAULT_ADDRESS || deployer.address // Use jackpot vault as fee collector
-    );
-    await lpBurner.waitForDeployment();
-    const lpBurnerAddress = await lpBurner.getAddress();
-    console.log("✅ RedDragonLPBurner deployed to:", lpBurnerAddress);
-
-    // Now deploy the Balancer Integration
-    const balancerIntegration = await RedDragonBalancerIntegration.deploy(
-      balancerVaultAddress,
-      weightedPoolFactoryAddress,
-      redDragonAddress,
-      pairedTokenAddress,
-      lpBurnerAddress
-    );
-    await balancerIntegration.waitForDeployment();
-    const balancerIntegrationAddress = await balancerIntegration.getAddress();
-    console.log("✅ RedDragonBalancerIntegration deployed to:", balancerIntegrationAddress);
-
-    // Create 80/20 pool with 0.25% fee
-    console.log("\n📦 Creating 80/20 pool...");
-    const createPoolTx = await balancerIntegration.createPool(25); // 0.25% swap fee
-    await createPoolTx.wait();
+    // Create pool
+    console.log("\n📦 Creating Balancer weighted pool...");
+    console.log("Pool tokens:", tokens);
+    console.log("Weights:", weights.map(w => hre.ethers.utils.formatEther(w)));
     
-    // Get pool address
-    const poolAddress = await balancerIntegration.poolAddress();
-    console.log("✅ Pool created at:", poolAddress);
-    console.log("✅ Pool ID:", await balancerIntegration.poolId());
-
-    // Save addresses to deployment file
-    addresses.lpBurner = lpBurnerAddress;
-    addresses.balancerIntegration = balancerIntegrationAddress;
-    addresses.lpToken = poolAddress;
+    // Create pool using the factory
+    console.log("Creating pool...");
+    const tx = await weightedPoolFactory.create(
+      poolName,
+      poolSymbol,
+      tokens,
+      weights,
+      swapFee,
+      deployer.address // Owner
+    );
+    
+    // Wait for transaction to be mined
+    console.log("Waiting for pool creation transaction to be mined...");
+    const receipt = await tx.wait();
+    
+    // Extract pool address from event logs
+    let poolAddress;
+    for (const event of receipt.events) {
+      if (event.event === "PoolCreated") {
+        poolAddress = event.args.pool;
+        break;
+      }
+    }
+    
+    if (!poolAddress) {
+      console.error("❌ Failed to extract pool address from transaction logs");
+      return;
+    }
+    
+    console.log("✅ Balancer pool created at:", poolAddress);
+    
+    // Save pool address
+    addresses.balancerPool = poolAddress;
+    
+    // Get pool ID
+    const poolContract = await hre.ethers.getContractAt("IWeightedPool", poolAddress);
+    const poolId = await poolContract.getPoolId();
+    console.log("📝 Pool ID:", poolId);
+    addresses.balancerPoolId = poolId;
+    
+    // Save to deployment file
     fs.writeFileSync(deploymentFile, JSON.stringify(addresses, null, 2));
-
-    // Update .env with LP token address
-    let envContent = fs.readFileSync('.env', 'utf8');
-    envContent = envContent.replace(/LP_TOKEN_ADDRESS=".*"/, `LP_TOKEN_ADDRESS="${poolAddress}"`);
-    fs.writeFileSync('.env', envContent);
-
-    console.log("\n🎉 80/20 pool creation complete!");
-    console.log("\n📋 Summary:");
-    console.log("- LP Token (Pool Token):", poolAddress);
-    console.log("- LP Burner:", lpBurnerAddress);
-    console.log("- Balancer Integration:", balancerIntegrationAddress);
-
-    console.log("\n🔹 Next steps:");
-    console.log("1. Add initial liquidity to the pool:");
-    console.log("   npx hardhat run scripts/deployment/add-balancer-liquidity.js --network sonic");
-    console.log("2. Deploy ve8020 contract:");
-    console.log("   npx hardhat run scripts/deployment/deploy-ve8020.js --network sonic");
-
+    console.log("📝 Saved pool address and ID to deployment file");
+    
+    // Instructions for next steps
+    console.log("\n⚠️ Next Steps:");
+    console.log("1. Run the add-balancer-liquidity.js script to add liquidity to the pool");
+    console.log("2. Set the LP token (pool address) in the lottery contract using setup-liquidity.js");
+    console.log(`3. Add the LP token address to your .env: LP_TOKEN_ADDRESS=${poolAddress}`);
+    
+    console.log("\n🎉 Balancer pool setup completed!");
+    
   } catch (error) {
-    console.error("❌ Error:", error);
-    process.exit(1);
+    console.error("❌ Setup failed:", error);
+    console.error(error.stack);
   }
 }
 
+// Execute the script
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error("❌ Script error:", error);
+    console.error(error);
     process.exit(1);
   }); 
