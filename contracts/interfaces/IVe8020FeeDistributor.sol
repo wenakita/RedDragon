@@ -21,20 +21,16 @@ interface IVe8020FeeDistributor {
     /**
      * @dev Set the allocation percentages for different purposes
      * @param _rewardAllocation Percentage for ve8020 rewards (basis points)
+     * @param _liquidityAllocation Percentage for liquidity (basis points)
      */
     function setFeeAllocation(
-        uint256 _rewardAllocation
+        uint256 _rewardAllocation,
+        uint256 _liquidityAllocation
     ) external;
     
     /**
-     * @dev Claim rewards for a specific epoch
+     * @dev Claims rewards for a specific epoch
      * @param _epoch Epoch to claim rewards for
      */
-    function claimEpochRewards(uint256 _epoch) external;
-    
-    /**
-     * @dev Manually trigger liquidity addition
-     * @param amount Amount to use for liquidity
-     */
-    function triggerLiquidityAddition(uint256 amount) external;
+    function claimRewards(uint256 _epoch) external;
 } 

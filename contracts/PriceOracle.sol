@@ -111,7 +111,7 @@ contract PriceOracle is Ownable, ReentrancyGuard {
      * @param price Price in USD with 6 decimals
      * @param confidence Confidence level 0-100
      */
-    function reportPrice(uint256 price, uint256 confidence) external nonReentrant {
+    function reportPrice(uint256 price, uint256 confidence) external {
         require(authorizedSources[msg.sender], "Not an authorized source");
         require(price > 0, "Price must be positive");
         require(confidence <= 100, "Confidence must be 0-100");
@@ -338,7 +338,7 @@ contract PriceOracle is Ownable, ReentrancyGuard {
             }
             
             validSources++;
-            totalPrice += data.price;
+            totalPrice += data.price * data.confidence; // Weight by confidence
             totalConfidence += data.confidence;
         }
         
@@ -347,30 +347,9 @@ contract PriceOracle is Ownable, ReentrancyGuard {
             return;
         }
         
-        // Calculate the median price (more resistant to outliers)
-        uint256 newPrice;
-        uint256 newConfidence;
-        
-        if (validSources == 1) {
-            // Only one source, use its price
-            for (uint256 i = 0; i < priceSources.length; i++) {
-                address source = priceSources[i];
-                if (!authorizedSources[source]) continue;
-                
-                PriceData memory data = sourceData[source];
-                if (data.price == 0 || block.timestamp - data.timestamp > MAX_PRICE_AGE) {
-                    continue;
-                }
-                
-                newPrice = data.price;
-                newConfidence = data.confidence;
-                break;
-            }
-        } else {
-            // Multiple sources, use average for simplicity (median would be better in production)
-            newPrice = totalPrice / validSources;
-            newConfidence = totalConfidence / validSources;
-        }
+        // Calculate weighted average price
+        uint256 newPrice = totalPrice / totalConfidence;
+        uint256 newConfidence = totalConfidence / validSources;
         
         // Check for excessive deviation
         uint256 deviation = _calculateDeviation(wSonicPriceUSD, newPrice);

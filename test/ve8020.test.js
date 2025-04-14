@@ -42,7 +42,8 @@ describe("ve8020", function () {
     it("should create a lock successfully", async function () {
       // Lock tokens for 1 year
       const lockAmount = ethers.utils.parseEther("1000");
-      const lockTime = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year from now
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const lockTime = currentTime + 365 * 86400; // 1 year from now
       
       await ve8020.connect(user1).createLock(lockAmount, lockTime);
       
@@ -58,18 +59,20 @@ describe("ve8020", function () {
       expect(await ve8020.totalSupply()).to.equal(votingPower);
     });
 
-    it("should not allow locking with too short lock time", async function () {
-      const lockAmount = ethers.utils.parseEther("1000");
-      const lockTime = Math.floor(Date.now() / 1000) + 3 * 86400; // 3 days from now
+    it("should not allow locking with too short lock time", async function() {
+      const amount = ethers.utils.parseEther("1000");
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const shortLockTime = currentTime + 86400; // 1 day from now
       
       await expect(
-        ve8020.connect(user1).createLock(lockAmount, lockTime)
-      ).to.be.revertedWith("Lock time too short");
+        ve8020.createLock(amount, shortLockTime)
+      ).to.be.revertedWith("Lock time must be in the future");
     });
 
     it("should not allow locking with too long lock time", async function () {
       const lockAmount = ethers.utils.parseEther("1000");
-      const lockTime = Math.floor(Date.now() / 1000) + 5 * 365 * 86400; // 5 years from now
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const lockTime = currentTime + 5 * 365 * 86400; // 5 years from now
       
       await expect(
         ve8020.connect(user1).createLock(lockAmount, lockTime)
@@ -89,7 +92,8 @@ describe("ve8020", function () {
     it("should increase lock amount successfully", async function () {
       // Create initial lock
       const initialAmount = ethers.utils.parseEther("1000");
-      const lockTime = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year from now
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const lockTime = currentTime + 365 * 86400; // 1 year from now
       await ve8020.connect(user1).createLock(initialAmount, lockTime);
       
       // Get initial voting power
@@ -111,14 +115,15 @@ describe("ve8020", function () {
     it("should extend lock time successfully", async function () {
       // Create initial lock
       const initialAmount = ethers.utils.parseEther("1000");
-      const initialLockTime = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year from now
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const initialLockTime = currentTime + 365 * 86400; // 1 year from now
       await ve8020.connect(user1).createLock(initialAmount, initialLockTime);
       
       // Get initial voting power
       const initialVotingPower = await ve8020.balanceOf(user1.address);
       
       // Extend lock time
-      const newLockTime = Math.floor(Date.now() / 1000) + 2 * 365 * 86400; // 2 years from now
+      const newLockTime = currentTime + 2 * 365 * 86400; // 2 years from now
       await ve8020.connect(user1).extendLockTime(newLockTime);
       
       // Check new unlock time (noting it rounds down to weeks)
@@ -163,7 +168,8 @@ describe("ve8020", function () {
     it("should allow withdrawal after lock expires", async function () {
       // Create a lock
       const lockAmount = ethers.utils.parseEther("1000");
-      const lockTime = Math.floor(Date.now() / 1000) + 7 * 86400; // 1 week from now (minimum)
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const lockTime = currentTime + 7 * 86400; // 1 week from now (minimum)
       await ve8020.connect(user1).createLock(lockAmount, lockTime);
       
       // Fast forward time past unlock time
@@ -273,7 +279,8 @@ describe("ve8020", function () {
     it("should return zero voting power after lock expires", async function () {
       // Create a lock
       const lockAmount = ethers.utils.parseEther("1000");
-      const lockTime = Math.floor(Date.now() / 1000) + 7 * 86400; // 1 week (minimum)
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const lockTime = currentTime + 7 * 86400; // 1 week (minimum)
       await ve8020.connect(user1).createLock(lockAmount, lockTime);
       
       // Check initial voting power
@@ -296,7 +303,8 @@ describe("ve8020", function () {
       expect(await ve8020.totalVotingPower()).to.equal(0);
       
       // Create locks
-      const lockTime = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const lockTime = currentTime + 365 * 86400; // 1 year
       await ve8020.connect(user1).createLock(ethers.utils.parseEther("1000"), lockTime);
       await ve8020.connect(user2).createLock(ethers.utils.parseEther("2000"), lockTime);
       
@@ -330,7 +338,8 @@ describe("ve8020", function () {
     it("should decrease total voting power when locks expire", async function () {
       // Create a lock
       const lockAmount = ethers.utils.parseEther("1000");
-      const lockTime = Math.floor(Date.now() / 1000) + 7 * 86400; // 1 week (minimum)
+      const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
+      const lockTime = currentTime + 7 * 86400; // 1 week (minimum)
       await ve8020.connect(user1).createLock(lockAmount, lockTime);
       
       // Get initial total voting power

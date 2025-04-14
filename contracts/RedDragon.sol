@@ -68,12 +68,8 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     uint256 public transactionCount = 0; // Tracks number of transactions for special limit purposes
     
     // First 69 transactions: 1% max tx, 2% max wallet
-    uint256 public constant SPECIAL_MAX_TRANSACTION_AMOUNT = (INITIAL_SUPPLY * 100) / 10000; // 1% of total supply
-    uint256 public constant SPECIAL_MAX_WALLET_AMOUNT = (INITIAL_SUPPLY * 200) / 10000; // 2% of total supply
-    
-    // After 69 transactions: 5% for both limits
-    uint256 public constant POST_SPECIAL_MAX_TRANSACTION_AMOUNT = (INITIAL_SUPPLY * 500) / 10000; // 5% of supply
-    uint256 public constant POST_SPECIAL_MAX_WALLET_AMOUNT = (INITIAL_SUPPLY * 1000) / 10000; // 10% of supply
+    uint256 public constant SPECIAL_WALLET_LIMIT = (INITIAL_SUPPLY * 200) / 10000; // 2% of total supply
+    uint256 public constant POST_SPECIAL_WALLET_LIMIT = (INITIAL_SUPPLY * 1000) / 10000; // 10% of supply
     
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
@@ -234,38 +230,28 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
         address from,
         address to,
         uint256 amount
-    ) internal override {
-        require(from != address(0), "Transfer from zero address");
-        require(to != address(0), "Transfer to zero address");
+    ) internal virtual override {
+        require(from != address(0), "ERC20: transfer from the zero address");
+        require(to != address(0), "ERC20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
         
-        // Check trading is enabled
+        // Check if trading is enabled
         if (!tradingEnabled) {
-            require(from == owner() || from == address(this) || to == owner(), "Trading not enabled");
-        }
-        
-        // Check transaction amount limit 
-        bool isExemptFromLimits = from == owner() || to == owner() || isFeeExempt[from] || isFeeExempt[to];
-        if (!isExemptFromLimits) {
-            // Apply special 1% limit for first 69 transactions, then 5% after
-            if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
-                require(amount <= SPECIAL_MAX_TRANSACTION_AMOUNT, "Amount exceeds special transaction limit");
-            } else {
-                require(amount <= POST_SPECIAL_MAX_TRANSACTION_AMOUNT, "Amount exceeds transaction limit");
-            }
-        }
-        
-        // Check wallet amount limit
-        bool isExemptFromWalletLimit = to == owner() || to == exchangePair || isFeeExempt[to];
-        if (!isExemptFromWalletLimit) {
-            // Apply special 2% wallet limit for first 69 transactions, then 5% after
-            if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
-                require(balanceOf(to) + amount <= SPECIAL_MAX_WALLET_AMOUNT, "Amount exceeds special wallet limit");
-            } else {
-                require(balanceOf(to) + amount <= POST_SPECIAL_MAX_WALLET_AMOUNT, "Amount exceeds wallet limit");
-            }
+            require(isFeeExempt[from] || isFeeExempt[to], "Trading is not enabled");
         }
 
+        // Check transaction limits
+        if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
+            require(amount <= SPECIAL_WALLET_LIMIT, "Amount exceeds special transaction limit");
+            require(balanceOf(to) + amount <= SPECIAL_WALLET_LIMIT, "Balance would exceed special wallet limit");
+        } else {
+            require(amount <= POST_SPECIAL_WALLET_LIMIT, "Amount exceeds transaction limit");
+            require(balanceOf(to) + amount <= POST_SPECIAL_WALLET_LIMIT, "Balance would exceed wallet limit");
+        }
+
+        // Increment transaction count before transfer
+        transactionCount++;
+        
         // Check if this is a swap (buying or selling)
         bool isSwap = (exchangePair != address(0)) && (from == exchangePair || to == exchangePair);
         bool isBuy = isSwap && from == exchangePair;
@@ -513,25 +499,25 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
      */
     function getCurrentTransactionLimit() public view returns (uint256) {
         if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
-            return SPECIAL_MAX_TRANSACTION_AMOUNT; // 1% during first 69 transactions
+            return SPECIAL_WALLET_LIMIT; // 2% during first 69 transactions
         }
-        return POST_SPECIAL_MAX_TRANSACTION_AMOUNT; // 5% after first 69 transactions
+        return POST_SPECIAL_WALLET_LIMIT; // 10% after first 69 transactions
     }
 
     /**
      * @dev Get current wallet limit based on transaction count
-     * @return The current maximum wallet amount (2% for first 69 tx, 5% after)
+     * @return The current maximum wallet amount (2% for first 69 tx, 10% after)
      */
     function getCurrentWalletLimit() public view returns (uint256) {
         if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
-            return SPECIAL_MAX_WALLET_AMOUNT; // 2% during first 69 transactions
+            return SPECIAL_WALLET_LIMIT; // 2% during first 69 transactions
         }
-        return POST_SPECIAL_MAX_WALLET_AMOUNT; // 5% after first 69 transactions
+        return POST_SPECIAL_WALLET_LIMIT; // 10% after first 69 transactions
     }
 
     /**
      * @dev Returns the number of remaining transactions at special limits
-     * @return Number of transactions remaining at the 1%/2% special limits
+     * @return Number of transactions remaining at the 2% special limit
      */
     function getRemainingSpecialTransactions() public view returns (uint256) {
         if (transactionCount >= SPECIAL_LIMIT_TRANSACTIONS) {
@@ -558,8 +544,8 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Cancel a scheduled admin action
-     * @param actionId The unique identifier for the action to cancel
+     * @dev Cancel a proposed action
+     * @param actionId The ID of the action to cancel
      */
     function cancelAction(bytes32 actionId) external onlyOwner {
         require(pendingActions[actionId] > 0, "Action not scheduled");
@@ -883,5 +869,86 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
         require(_ve8020Address != address(0), "Ve8020 address cannot be zero");
         ve8020Address = _ve8020Address;
         emit Ve8020AddressUpdated(_ve8020Address);
+    }
+
+    /**
+     * @dev Schedule an update to the jackpot address
+     * @param _newAddress The new jackpot address
+     */
+    function scheduleJackpotAddressUpdate(address _newAddress) external onlyOwner {
+        require(_newAddress != address(0), "New address cannot be zero");
+        bytes32 actionId = keccak256(abi.encodePacked("updateJackpotAddress", _newAddress));
+        pendingActions[actionId] = block.timestamp + ADMIN_ACTION_DELAY;
+        pendingActionDescriptions[actionId] = "Update jackpot address";
+        emit ActionScheduled(actionId, "Update jackpot address", block.timestamp + ADMIN_ACTION_DELAY);
+    }
+
+    /**
+     * @dev Execute a scheduled jackpot address update
+     * @param _newAddress The new jackpot address
+     */
+    function executeJackpotAddressUpdate(address _newAddress) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateJackpotAddress", _newAddress));
+        require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
+        jackpotAddress = _newAddress;
+        delete pendingActions[actionId];
+        emit ActionExecuted(actionId, "Update jackpot address");
+    }
+
+    /**
+     * @dev Schedule an update to the ve8020 address
+     * @param _newAddress The new ve8020 address
+     */
+    function scheduleVe8020AddressUpdate(address _newAddress) external onlyOwner {
+        require(_newAddress != address(0), "New address cannot be zero");
+        bytes32 actionId = keccak256(abi.encodePacked("updateVe8020Address", _newAddress));
+        pendingActions[actionId] = block.timestamp + ADMIN_ACTION_DELAY;
+        pendingActionDescriptions[actionId] = "Update ve8020 address";
+        emit ActionScheduled(actionId, "Update ve8020 address", block.timestamp + ADMIN_ACTION_DELAY);
+    }
+
+    /**
+     * @dev Execute a scheduled ve8020 address update
+     * @param _newAddress The new ve8020 address
+     */
+    function executeVe8020AddressUpdate(address _newAddress) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateVe8020Address", _newAddress));
+        require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
+        ve8020Address = _newAddress;
+        delete pendingActions[actionId];
+        emit ActionExecuted(actionId, "Update ve8020 address");
+        emit Ve8020AddressUpdated(_newAddress);
+    }
+
+    /**
+     * @dev Schedule a fee update
+     * @param _jackpotFee New jackpot fee
+     * @param _burnFee New burn fee
+     * @param _ve8020Fee New ve8020 fee
+     */
+    function scheduleFeeUpdate(uint256 _jackpotFee, uint256 _burnFee, uint256 _ve8020Fee) external onlyOwner {
+        uint256 totalNewFee = _jackpotFee + _burnFee + _ve8020Fee;
+        require(totalNewFee <= 1000, "Total fee cannot exceed 10%");
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", _jackpotFee, _burnFee, _ve8020Fee));
+        pendingActions[actionId] = block.timestamp + FEE_UPDATE_DELAY;
+        pendingActionDescriptions[actionId] = "Update fees";
+        emit ActionScheduled(actionId, "Update fees", block.timestamp + FEE_UPDATE_DELAY);
+    }
+
+    /**
+     * @dev Execute a scheduled fee update
+     * @param _jackpotFee New jackpot fee
+     * @param _burnFee New burn fee
+     * @param _ve8020Fee New ve8020 fee
+     */
+    function executeFeeUpdate(uint256 _jackpotFee, uint256 _burnFee, uint256 _ve8020Fee) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", _jackpotFee, _burnFee, _ve8020Fee));
+        require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
+        jackpotFee = _jackpotFee;
+        burnFee = _burnFee;
+        ve8020Fee = _ve8020Fee;
+        totalFee = _jackpotFee + _burnFee + _ve8020Fee;
+        delete pendingActions[actionId];
+        emit ActionExecuted(actionId, "Update fees");
     }
 }

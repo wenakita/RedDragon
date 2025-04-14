@@ -85,7 +85,19 @@ contract ve8020 is Ownable, ReentrancyGuard {
         if (timeDiff >= MAX_LOCK_TIME || point.bias <= point.slope * timeDiff) {
             return 0;
         }
-        return point.bias - point.slope * timeDiff;
+        
+        // Calculate voting power with linear decay
+        uint256 votingPower = point.bias - point.slope * timeDiff;
+        
+        // Get the user's lock
+        LockedBalance memory userLock = locked[_user];
+        
+        // If the lock has expired, return 0
+        if (block.timestamp >= userLock.unlockTime) {
+            return 0;
+        }
+        
+        return votingPower;
     }
     
     /**
@@ -107,8 +119,8 @@ contract ve8020 is Ownable, ReentrancyGuard {
         // Check if the unlock time is valid (between min and max lock time)
         uint256 unlockTime = (_unlockTime / WEEK) * WEEK; // Round down to whole weeks
         require(unlockTime > block.timestamp, "Lock time must be in the future");
-        require(unlockTime <= block.timestamp + MAX_LOCK_TIME, "Lock time too long");
         require(unlockTime >= block.timestamp + MIN_LOCK_TIME, "Lock time too short");
+        require(unlockTime <= block.timestamp + MAX_LOCK_TIME, "Lock time too long");
         
         require(_value > 0, "Must lock non-zero amount");
         
@@ -249,8 +261,8 @@ contract ve8020 is Ownable, ReentrancyGuard {
             lockDuration = MAX_LOCK_TIME;
         }
         
-        // Voting power is proportional to locked amount and time
-        // Power = amount * lockDuration / MAX_LOCK_TIME
+        // Voting power = amount * (lockDuration / MAX_LOCK_TIME)
+        // This means max lock time = full voting power, shorter locks = proportionally less
         return (_amount * lockDuration) / MAX_LOCK_TIME;
     }
     
@@ -277,11 +289,11 @@ contract ve8020 is Ownable, ReentrancyGuard {
         uint256 newSlope = 0;
         
         if (_oldLocked.unlockTime > block.timestamp) {
-            oldSlope = _oldLocked.amount / (MAX_LOCK_TIME);
+            oldSlope = (_oldLocked.amount * MAX_LOCK_TIME) / (_oldLocked.unlockTime - block.timestamp);
         }
         
         if (_newLocked.unlockTime > block.timestamp) {
-            newSlope = _newLocked.amount / (MAX_LOCK_TIME);
+            newSlope = (_newLocked.amount * MAX_LOCK_TIME) / (_newLocked.unlockTime - block.timestamp);
         }
         
         // Update user point history

@@ -10,7 +10,7 @@ describe("PriceOracle", function () {
   let user;
 
   const INITIAL_PRICE = 5000000; // $5.00 with 6 decimals
-  const WSONIC_AMOUNT = ethers.utils.parseEther("100"); // 100 wSonic
+  const WSONIC_AMOUNT = ethers.utils.parseUnits("100", 18); // 100 wSonic
 
   beforeEach(async function () {
     [owner, source1, source2, source3, user] = await ethers.getSigners();
@@ -230,7 +230,7 @@ describe("PriceOracle", function () {
       
       // Calculate expected wSonic amount
       // $500.00 / $5.00 = 100 wSonic
-      const expectedWSonic = ethers.utils.parseEther("100");
+      const expectedWSonic = ethers.utils.parseUnits("100", 18);
       
       // Check conversion
       expect(await priceOracle.usdToWSonic(usdAmount)).to.equal(expectedWSonic);

@@ -1,6 +1,6 @@
 # RedDragon Token Ecosystem
 
-This is the official repository for the RedDragon token ecosystem, featuring the ve8020 voting escrow system for rewarding holders, optimized fee distribution, and an innovative jackpot lottery mechanism that rewards active traders.
+This is the official repository for the RedDragon token ecosystem, featuring Balancer/Beets' ve8020 voting escrow system for rewarding holders, optimized fee distribution, and an innovative jackpot lottery mechanism that rewards active traders.
 
 ## Table of Contents
 - [Overview](#overview)

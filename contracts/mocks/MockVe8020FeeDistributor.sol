@@ -16,7 +16,6 @@ contract MockVe8020FeeDistributor is IVe8020FeeDistributor {
     uint256 public totalRewardsAdded;
     mapping(uint256 => bool) public epochHasRewards;
     mapping(uint256 => bool) public rewardsClaimed;
-    uint256 public liquidityAdded;
     
     constructor(address _rewardToken) {
         rewardToken = _rewardToken;
@@ -44,25 +43,19 @@ contract MockVe8020FeeDistributor is IVe8020FeeDistributor {
      * @inheritdoc IVe8020FeeDistributor
      */
     function setFeeAllocation(
-        uint256 _rewardAllocation
+        uint256 _rewardAllocation,
+        uint256 _liquidityAllocation
     ) external override {
-        require(_rewardAllocation == 10000, "Allocations must total 10000 basis points");
+        require(_rewardAllocation + _liquidityAllocation == 10000, "Must be 10000 basis points (100%)");
         rewardAllocation = _rewardAllocation;
-        liquidityAllocation = 10000 - _rewardAllocation;
+        liquidityAllocation = _liquidityAllocation;
     }
     
     /**
      * @inheritdoc IVe8020FeeDistributor
      */
-    function claimEpochRewards(uint256 _epoch) external override {
+    function claimRewards(uint256 _epoch) external override {
         require(epochHasRewards[_epoch], "No rewards for this epoch");
         rewardsClaimed[_epoch] = true;
-    }
-    
-    /**
-     * @inheritdoc IVe8020FeeDistributor
-     */
-    function triggerLiquidityAddition(uint256 amount) external override {
-        liquidityAdded += amount;
     }
 } 
