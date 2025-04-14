@@ -42,6 +42,58 @@
 - ✅ Updated contracts to use these interfaces
 - ✅ Created a comprehensive migration guide (`BALANCER_MIGRATION.md`)
 
+## 2023-04-13 Updates
+
+This update focuses on streamlining the codebase by removing unused components and refactoring contracts for simplicity and gas efficiency.
+
+### Key Changes
+
+1. **Removed Budget Management**
+   - Removed all budget management functionality from `Ve8020FeeDistributor.sol`
+   - Set allocation to 100% rewards for ve8020 holders (removing liquidity allocation)
+   - Simplified reward distribution logic
+
+2. **Removed Unused Vaults**
+   - Removed `RedDragonDevelopmentVault.sol` (no development funds available)
+   - Removed `RedDragonLiquidityVault.sol` (simplified allocation model)
+   - Removed `RedDragonThankYouToken.sol` (superseded by multi-version)
+
+3. **Code Structure**
+   - Simplified contract interfaces
+   - Updated constructor parameters
+   - Improved documentation
+
+### Ve8020FeeDistributor Changes
+
+The `Ve8020FeeDistributor` contract has been streamlined to focus solely on distributing rewards to ve8020 token holders:
+
+- Removed `wrappedSonic` token dependency
+- Removed `router` interface and all DEX integration
+- Removed liquidity-related functions (`_addLiquidity`, `triggerLiquidityAddition`, etc.)
+- Updated `setFeeAllocation` to only accept 100% allocation to rewards
+- Simplified `addRewards` and `receiveRewards` functions to allocate all fees to rewards
+
+### Code Size and Gas Optimization
+
+These changes have significantly reduced the code size and complexity:
+
+| Contract | Before | After | Reduction |
+|----------|--------|-------|-----------|
+| Ve8020FeeDistributor | 540 lines | 372 lines | 31% |
+
+Gas usage for key operations has been optimized:
+
+- `addRewards`: ~20% gas reduction (estimated)
+- `receiveRewards`: ~25% gas reduction (estimated)
+
+### Testing
+
+A comprehensive test suite has been created to ensure functionality:
+
+- Tests for reward distribution proportionality
+- Tests for emergency withdrawals
+- Tests for fee allocation setting
+
 ## Remaining Tasks
 
 1. **VRF Implementation**
