@@ -12,10 +12,10 @@ import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IVRFConsumer.sol";
 
 /**
- * @dev Interface for the thank you token that grants special boosts
+ * @dev Interface for the red envelope that grants special boosts
  */
-interface IRedDragonThankYouToken {
-    function hasThankYouToken(address user) external view returns (bool);
+interface IRedEnvelope {
+    function hasRedEnvelope(address user) external view returns (bool);
     function calculateBoost(address user) external view returns (uint256);
 }
 
@@ -23,9 +23,9 @@ interface IRedDragonThankYouToken {
  * @title RedDragonSwapLottery
  * @dev Implements a probability-based lottery system where users can win based on their wS amount
  * Probabilities:
- * - 100 wS = 0.1% chance
- * - 1000 wS = 1% chance
- * - 10000 wS = 10% chance
+ * - 100 wS = 0.04% chance
+ * - 1000 wS = 0.4% chance
+ * - 10000 wS = 4% chance
  * - Global probability increases by a small percentage of swap amount with consecutive losses
  * - Higher boost cap allows for rare but significant jackpots to accumulate
  * - Users' probability is boosted based on their LP token holdings using Curve's boost formula
@@ -41,13 +41,16 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     uint256 private constant TIMELOCK_PERIOD = 2 days;
     
     // Constants for probability calculations
-    uint256 private constant BASE_WS_AMOUNT = 100 ether; // 100 wS
-    uint256 private constant BASE_PROBABILITY = 1; // 0.1%
-    uint256 private constant PROBABILITY_DENOMINATOR = 1000; // For 0.1% precision
-    uint256 private constant MAX_PROBABILITY = 40; // 4%
+    uint256 private constant BASE_WS_AMOUNT = 1000 ether; // 1000 wS tokens as base
+
+    // Probability settings
+    uint256 private constant BASE_PROBABILITY = 4; // 0.0004% (using PROBABILITY_DENOMINATOR of 10000000)
+    uint256 private constant PROBABILITY_DENOMINATOR = 10000000; // For 0.0001% precision
+    uint256 private constant MAX_PROBABILITY = 400; // 4% (base max without boosts)
     
     // Constants for pity timer - ULTRA CONSERVATIVE SETTINGS
-    uint256 private constant PITY_PERCENT_OF_SWAP = 1; // Increase by 0.1% of swap amount (1 = 0.1%)
+    uint256 private constant PITY_PERCENT_OF_SWAP = 1; // Increase by 0.0001% of swap amount (now using divisor 10000000)
+    uint256 private constant PITY_DIVISOR = 10000000; // Divisor for pity calculation (was 10000)
     uint256 private constant MAX_PITY_BOOST = 10000; // Maximum 10000% boost (100x)
     
     // Constants for Curve's boost formula
@@ -57,9 +60,9 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     uint256 private constant MAX_BOOST_MULTIPLIER = 250; // Maximum 2.5x boost
     
     // Entry amount settings
-    uint256 private constant MIN_WS_ENTRY = 100 ether; // 100 wS
+    uint256 private constant MIN_WS_ENTRY = 1 ether; // 1 wS
     uint256 private constant MAX_WS_ENTRY = 10000 ether; // 10,000 wS
-    uint256 private constant MIN_USD_ENTRY = 100_000000; // $100 USD (6 decimals)
+    uint256 private constant MIN_USD_ENTRY = 1_000000; // $1 USD (6 decimals)
     uint256 private constant MAX_USD_ENTRY = 10000_000000; // $10,000 USD (6 decimals)
     bool public useUsdEntryAmounts = false; // Default to wS-based entry
     
@@ -85,8 +88,8 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     uint256 public totalVotingPower; // Total voting power
     mapping(address => uint256) public userVotingPower; // User's voting power
     
-    // Thank you token contract for special boosts
-    IRedDragonThankYouToken public thankYouToken;
+    // Red envelope contract for special boosts
+    IRedEnvelope public redEnvelope;
     
     // LP Booster for additional boosts based on LP token holdings
     address public lpBooster;
@@ -119,7 +122,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     event VotingPowerUpdated(address indexed user, uint256 oldPower, uint256 newPower);
     event LPTokenSet(address indexed lpTokenAddress);
     event VotingTokenSet(address indexed votingTokenAddress);
-    event ThankYouTokenSet(address indexed thankYouTokenAddress);
+    event RedEnvelopeSet(address indexed redEnvelopeAddress);
     event VerifierUpdated(address indexed newVerifier);
     event PauseStateChanged(bool isPaused);
     event TimelockOperationProposed(bytes32 indexed operationId, string operation, uint256 expirationTime);
@@ -136,7 +139,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     /**
      * @dev Circuit breaker modifier
      */
-    modifier whenNotPaused() {
+    modifier whenNotPaused() override {
         require(!isPaused, "Contract is paused");
         _;
     }
@@ -229,6 +232,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         require(request.user.code.length == 0, "Winner cannot be a contract");
 
         emit RandomnessReceived(requestId, randomWords[0]);
+        emit IVRFConsumer.RandomnessFulfilled(requestId, randomWords[0]);
 
         // Calculate if user won based on probability
         uint256 randomValue = randomWords[0] % PROBABILITY_DENOMINATOR;
@@ -300,6 +304,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         // Prevent overflow by checking maximum input
         require(wsAmount <= type(uint256).max / BASE_PROBABILITY, "Amount too large");
         
+        // Calculate probability with new 10000 denominator (4 = 0.04%)
         uint256 probability = (wsAmount * BASE_PROBABILITY) / BASE_WS_AMOUNT;
         return probability > MAX_PROBABILITY ? MAX_PROBABILITY : probability;
     }
@@ -313,8 +318,8 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         // Protect against large amounts
         require(wsAmount <= type(uint256).max / PITY_PERCENT_OF_SWAP, "Amount too large");
         
-        // Calculate as a percentage of the swap amount (0.1% by default)
-        return (wsAmount * PITY_PERCENT_OF_SWAP) / 1000;
+        // Calculate as a percentage of the swap amount (0.01% by default with new divisor)
+        return (wsAmount * PITY_PERCENT_OF_SWAP) / PITY_DIVISOR;
     }
     
     /**
@@ -329,14 +334,13 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         
         // Protect against overflow
         if (boostMultiplier > type(uint256).max - baseProbability) {
-            return MAX_PROBABILITY;
+            return type(uint256).max;
         }
         
         // Calculate boosted probability (base + boost)
         uint256 boostedProbability = baseProbability + boostMultiplier;
         
-        // Cap at maximum probability
-        return boostedProbability > MAX_PROBABILITY ? MAX_PROBABILITY : boostedProbability;
+        return boostedProbability;
     }
     
     /**
@@ -430,16 +434,16 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         // Calculate boosted probability (applying the curve-style boost)
         uint256 finalProbability = (pityBoostedProbability * boostMultiplier) / PRECISION;
         
-        // Apply special thank you token boost if applicable
-        if (address(thankYouToken) != address(0)) {
-            try thankYouToken.calculateBoost(user) returns (uint256 thankYouBoost) {
-                if (thankYouBoost > 0) {
-                    // The thank you boost is in units of BOOST_PRECISION (10000)
+        // Apply special red envelope boost if applicable
+        if (address(redEnvelope) != address(0)) {
+            try redEnvelope.calculateBoost(user) returns (uint256 envelopeBoost) {
+                if (envelopeBoost > 0) {
+                    // The envelope boost is in units of BOOST_PRECISION (10000)
                     // 69 = 0.69%
-                    finalProbability += (finalProbability * thankYouBoost) / 10000;
+                    finalProbability += (finalProbability * envelopeBoost) / 10000;
                 }
             } catch {
-                // If token calculation fails, continue without thank you boost
+                // If envelope calculation fails, continue without envelope boost
             }
         }
         
@@ -455,8 +459,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
             }
         }
         
-        // Cap at maximum probability
-        return finalProbability > MAX_PROBABILITY ? MAX_PROBABILITY : finalProbability;
+        return finalProbability;
     }
     
     /**
@@ -691,13 +694,13 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     }
 
     /**
-     * @dev Set the thank you token contract
-     * @param _thankYouToken The address of the thank you token contract
+     * @dev Set the red envelope contract
+     * @param _redEnvelope The address of the red envelope contract
      */
-    function setThankYouToken(address _thankYouToken) external onlyOwner {
-        require(_thankYouToken != address(0), "Thank you token cannot be zero address");
-        thankYouToken = IRedDragonThankYouToken(_thankYouToken);
-        emit ThankYouTokenSet(_thankYouToken);
+    function setRedEnvelope(address _redEnvelope) external onlyOwner {
+        require(_redEnvelope != address(0), "Red envelope cannot be zero address");
+        redEnvelope = IRedEnvelope(_redEnvelope);
+        emit RedEnvelopeSet(_redEnvelope);
     }
 
     /**
@@ -913,17 +916,8 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     function requestRandomness() external override returns (bytes32) {
         // This lottery doesn't directly request randomness - it's done via the verifier
         // But we need to implement this for the interface
-        return 0;
-    }
-    
-    /**
-     * @dev Callback function called when randomness is fulfilled
-     * @param requestId The request ID of the randomness request
-     * @param randomWords The random values generated
-     */
-    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external override {
-        // The lottery doesn't directly receive randomness - it's handled via the verifier
-        // This is implemented to satisfy the IVRFConsumer interface
-        emit RandomnessReceived(requestId, randomWords.length > 0 ? randomWords[0] : 0);
+        bytes32 requestId = bytes32(0);
+        emit IVRFConsumer.RandomnessRequested(requestId);
+        return requestId;
     }
 } 
