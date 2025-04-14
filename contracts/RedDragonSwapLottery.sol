@@ -915,4 +915,15 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         // But we need to implement this for the interface
         return 0;
     }
+    
+    /**
+     * @dev Callback function called when randomness is fulfilled
+     * @param requestId The request ID of the randomness request
+     * @param randomWords The random values generated
+     */
+    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external override {
+        // The lottery doesn't directly receive randomness - it's handled via the verifier
+        // This is implemented to satisfy the IVRFConsumer interface
+        emit RandomnessReceived(requestId, randomWords.length > 0 ? randomWords[0] : 0);
+    }
 } 

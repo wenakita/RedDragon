@@ -6,13 +6,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./RedDragonSwapLottery.sol";
 import "./interfaces/IPaintSwapVRF.sol";
+import "./interfaces/IVRFConsumer.sol";
 
 /**
  * @title RedDragonThankYouToken
  * @dev A special NFT that grants the holder a 0.69% boost in the RedDragonSwapLottery
  * Created to cryptographically thank contributors on the blockchain
  */
-contract RedDragonThankYouTokenMulti is ERC721, Ownable {
+contract RedDragonThankYouTokenMulti is ERC721, Ownable, IVRFConsumer {
     using Strings for uint256;
     
     // Reference to the lottery contract
@@ -57,7 +58,7 @@ contract RedDragonThankYouTokenMulti is ERC721, Ownable {
     // Events
     event ThankYouTokenMinted(address indexed recipient, uint256 indexed tokenId, bytes4[] methodSignatures);
     event RandomnessRequested(bytes32 indexed requestId);
-    event RandomnessReceived(bytes32 indexed requestId, uint256 randomness);
+    event RandomnessFulfilled(bytes32 indexed requestId, uint256 firstRandomValue);
     
     /**
      * @dev Constructor
@@ -91,29 +92,37 @@ contract RedDragonThankYouTokenMulti is ERC721, Ownable {
         require(!hasMinted, "Token has already been minted");
         
         // Request randomness from PaintSwap VRF
-        bytes32 requestId = paintSwapVRF.requestRandomness();
+        bytes32 requestId = requestRandomness();
         
         // Store pending mint details
         pendingMints[requestId] = PendingMint({
             message: thankYouMessage
         });
-        
-        emit RandomnessRequested(requestId);
     }
     
     /**
-     * @dev Callback function called by PaintSwap VRF when randomness is ready
-     * @param requestId The ID of the randomness request
+     * @dev Implements IVRFConsumer.requestRandomness to request randomness from the VRF service
+     * @return requestId The ID of the randomness request
+     */
+    function requestRandomness() public override returns (bytes32) {
+        bytes32 requestId = paintSwapVRF.requestRandomness();
+        emit RandomnessRequested(requestId);
+        return requestId;
+    }
+    
+    /**
+     * @dev Callback function called when randomness is fulfilled
+     * @param requestId The request ID of the randomness request
      * @param randomWords The random values generated
      */
-    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external {
+    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external override {
         require(msg.sender == address(paintSwapVRF), "Only VRF provider can fulfill");
         require(randomWords.length > 0, "No random values provided");
         
         PendingMint memory pendingMint = pendingMints[requestId];
         require(bytes(pendingMint.message).length > 0, "Request not found");
         
-        emit RandomnessReceived(requestId, randomWords[0]);
+        emit RandomnessFulfilled(requestId, randomWords[0]);
         
         // Mark as minted
         hasMinted = true;
@@ -231,5 +240,29 @@ contract RedDragonThankYouTokenMulti is ERC721, Ownable {
      */
     function _exists(uint256 tokenId) internal view virtual override returns (bool) {
         return tokenId < _nextTokenId && _ownerOf(tokenId) != address(0);
+    }
+    
+    /**
+     * @dev Check if VRF is enabled for this contract
+     * @return True if VRF is enabled
+     */
+    function isVrfEnabled() external view override returns (bool) {
+        return address(paintSwapVRF) != address(0);
+    }
+    
+    /**
+     * @dev Get the VRF configuration
+     * @return vrfCoordinator Address of the VRF coordinator
+     * @return keyHash VRF key hash
+     * @return subscriptionId VRF subscription ID
+     */
+    function getVRFConfiguration() external view override returns (
+        address vrfCoordinator,
+        bytes32 keyHash,
+        uint64 subscriptionId
+    ) {
+        // For simplicity, we only return the VRF provider address
+        // The actual implementation may vary depending on the provider's structure
+        return (address(paintSwapVRF), bytes32(0), 0);
     }
 } 
