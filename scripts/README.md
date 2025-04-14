@@ -1,16 +1,8 @@
 # Scripts
 
-This directory contains utility scripts for the RedDragon ecosystem.
+This directory contains maintenance scripts:
 
-## Maintenance Scripts
+- `move_deprecated.sh`: Moves redundant contracts to the deprecated folder
+- `move_shadow_to_deprecated.sh`: Moves Shadow interfaces to the deprecated folder
 
-- `move_deprecated.sh`: Script to move redundant contracts to the deprecated folder
-- `move_shadow_to_deprecated.sh`: Script to move Shadow interfaces to the deprecated folder
-
-## Usage
-
-To run any script:
-
-```bash
-bash scripts/script_name.sh
-``` 
+Run scripts with: `bash scripts/script_name.sh` 
