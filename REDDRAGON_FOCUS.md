@@ -10,6 +10,16 @@ The **RedDragon** repository focuses specifically on the core RedDragon token ec
 2. **Governance Mechanics**: The ve8020 voting escrow system for governance
 3. **Reward Distribution**: The optimized fee distributor for ve8020 holders
 
+## Core Fee Structure
+
+The RedDragon token implements a 10% fee on transactions, distributed as follows:
+
+- **6.9%** - Directed to the jackpot system, rewarding users through the lottery
+- **2.41%** - Sent to the ve8020 Fee Distributor, rewarding governance participants
+- **0.69%** - Burned, permanently reducing the token supply
+
+This balanced fee structure supports both short-term engagement (jackpot/lottery) and long-term holders (ve8020), while maintaining deflationary tokenomics through regular burns.
+
 ## Differences from Dragon Repository
 
 The original **dragon** repository contained:

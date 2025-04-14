@@ -18,6 +18,19 @@ The RedDragon ecosystem consists of the following main contracts:
 - **Optimized for Gas**: Streamlined contracts with minimal overhead
 - **Governance Ready**: Voting power proportional to lock duration and amount
 
+## Fee Structure
+
+The RedDragon token implements a 10% fee on transactions, distributed as follows:
+
+- **6.9%** - Jackpot system: Rewards distributed through the lottery system
+- **2.41%** - ve8020 Fee Distributor: Rewards for token holders who lock in the governance system
+- **0.69%** - Token burn: Permanently removed from circulation, increasing scarcity
+
+This structure ensures:
+- Long-term holders are rewarded through the ve8020 system
+- Users are incentivized to participate in the ecosystem
+- Deflationary tokenomics through regular burns
+
 ## Recent Updates
 
 We've significantly optimized the codebase by:
