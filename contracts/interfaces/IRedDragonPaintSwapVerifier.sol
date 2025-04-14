@@ -18,4 +18,16 @@ interface IRedDragonPaintSwapVerifier {
     function randomnessToRange(bytes32 requestId, uint256 range) external view returns (uint256);
     function checkThreshold(bytes32 requestId, uint256 denominator, uint256 threshold) external view returns (bool);
     function fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) external;
+    
+    /**
+     * @dev Get the VRF configuration
+     * @return vrfCoordinator Address of the VRF coordinator
+     * @return keyHash VRF key hash
+     * @return subscriptionId VRF subscription ID
+     */
+    function getVRFConfiguration() external view returns (
+        address vrfCoordinator,
+        bytes32 keyHash,
+        uint64 subscriptionId
+    );
 } 

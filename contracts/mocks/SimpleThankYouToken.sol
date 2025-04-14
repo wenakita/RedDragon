@@ -5,86 +5,78 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title SimpleThankYouToken
- * @dev A simplified version of the thank you token for testing
+ * @title SimpleRedEnvelope
+ * @dev A simple mock red envelope contract for testing
  */
-contract SimpleThankYouToken is ERC721, Ownable {
-    // Boost parameters
-    uint256 public constant THANK_YOU_BOOST = 69; // 0.69% boost (69/10000)
-    uint256 public constant BOOST_PRECISION = 10000;
-    
-    // The recipient of the thank you token
-    address public constant RECIPIENT = 0x3291B1aE6B74d59a4334bBA0257873Dda5d18115;
-    
-    // Token metadata
-    string public baseURI;
-    string public thankYouMessage;
-    
-    // Store method signatures (4-byte selectors) instead of transaction hashes
-    // These represent the VRF methods used in the integration
-    bytes4[] public commemoratedMethodSignatures;
-    
-    // Token tracking
-    uint256 private _nextTokenId;
-    bool public hasMinted;
-    
-    /**
-     * @dev Constructor
-     * @param _message Thank you message to include with the token
-     * @param _methodSignatures Array of method signatures (4-byte selectors) to commemorate
-     */
-    constructor(string memory _message, bytes4[] memory _methodSignatures) 
-        ERC721("SimpleThankYou", "THANKS") {
-        thankYouMessage = _message;
-        commemoratedMethodSignatures = _methodSignatures;
-        hasMinted = false;
+contract SimpleRedEnvelope is ERC721, Ownable {
+    // Token ID counter
+    uint256 private _tokenIdCounter;
+
+    // Mapping from address to token ID
+    mapping(address => uint256) private _userTokens;
+
+    // Mapping from token ID to rarity level
+    mapping(uint256 => uint256) private _tokenRarities;
+
+    // Base URI for token metadata
+    string private _baseTokenURI;
+
+    constructor() ERC721("RedDragon Red Envelope", "RDENV") {
+        _tokenIdCounter = 0;
     }
-    
+
+    /**
+     * @dev Mint a new red envelope to the specified address
+     * @param to The address to mint the token to
+     * @param rarity The rarity level of the token
+     */
+    function mint(address to, uint256 rarity) external onlyOwner {
+        require(to != address(0), "Cannot mint to zero address");
+        require(_userTokens[to] == 0, "User already has a red envelope");
+
+        uint256 tokenId = _tokenIdCounter;
+        _tokenIdCounter++;
+
+        _safeMint(to, tokenId);
+        _userTokens[to] = tokenId;
+        _tokenRarities[tokenId] = rarity;
+    }
+
     /**
      * @dev Set the base URI for token metadata
-     * @param _baseURI New base URI
+     * @param baseURI The new base URI
      */
-    function setBaseURI(string memory _baseURI) external onlyOwner {
-        baseURI = _baseURI;
+    function setBaseURI(string memory baseURI) external onlyOwner {
+        _baseTokenURI = baseURI;
     }
-    
+
     /**
-     * @dev Mint the thank you token directly (for testing)
+     * @dev Get the base URI for token metadata
      */
-    function mint() external onlyOwner {
-        require(!hasMinted, "Token already minted");
-        hasMinted = true;
-        
-        // Mint the token
-        uint256 tokenId = _nextTokenId++;
-        _safeMint(RECIPIENT, tokenId);
+    function _baseURI() internal view override returns (string memory) {
+        return _baseTokenURI;
     }
-    
+
     /**
-     * @dev Get the number of commemorated method signatures
-     * @return The number of commemorated method signatures
+     * @dev Check if a user has a red envelope
+     * @param user The address to check
+     * @return bool Whether the user has a red envelope
      */
-    function getCommemorationCount() external view returns (uint256) {
-        return commemoratedMethodSignatures.length;
+    function hasRedEnvelope(address user) public view returns (bool) {
+        return _userTokens[user] != 0;
     }
-    
+
     /**
-     * @dev Check if an address owns any thank you tokens
-     * @param user Address to check
-     * @return True if the user owns at least one token
-     */
-    function hasThankYouToken(address user) public view returns (bool) {
-        return balanceOf(user) > 0;
-    }
-    
-    /**
-     * @dev Calculate the boost for a user based on token ownership
-     * @param user Address to calculate boost for
-     * @return Boost amount in lottery probability units
+     * @dev Calculate the boost for a user based on their red envelope
+     * @param user The address to calculate the boost for
+     * @return uint256 The boost percentage (in basis points)
      */
     function calculateBoost(address user) public view returns (uint256) {
-        if (hasThankYouToken(user)) {
-            return THANK_YOU_BOOST;
+        if (hasRedEnvelope(user)) {
+            uint256 tokenId = _userTokens[user];
+            uint256 rarity = _tokenRarities[tokenId];
+            // Simple boost calculation: rarity * 10 basis points
+            return rarity * 10;
         }
         return 0;
     }

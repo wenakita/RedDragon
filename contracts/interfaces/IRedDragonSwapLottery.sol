@@ -80,4 +80,8 @@ interface IRedDragonSwapLottery {
     
     // Security/checks
     function isFlashLoanAttack(address from, address to) external returns (bool);
+
+    function isLotteryEnabled() external view returns (bool);
+    function getJackpotTokenSymbol() external view returns (string memory);
+    function processRandomWords(uint256 requestId, uint256[] memory randomWords) external;
 } 

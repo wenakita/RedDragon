@@ -5,39 +5,26 @@ import "../RedDragonSwapLottery.sol";
 
 /**
  * @title TestRedDragonSwapLottery
- * @dev Modified lottery contract for testing automatic jackpot distribution
+ * @dev Test implementation of RedDragonSwapLottery with exposed internal functions
  */
-contract TestRedDragonSwapLottery is RedDragonSwapLottery {
-    
-    constructor(address _rewardToken, address _verifier) 
-        RedDragonSwapLottery(_rewardToken, _verifier) 
-    {}
-    
+abstract contract TestRedDragonSwapLottery is RedDragonSwapLottery {
+    constructor(address _wrappedSonic, address _verifier) RedDragonSwapLottery(_wrappedSonic, _verifier) {}
+
     /**
-     * @dev Override isSecureContext to always return true for testing
+     * @dev Expose the internal processLotteryResult function for testing
      */
-    function isSecureContext(address user) public pure override returns (bool) {
-        return true;
+    function testProcessLotteryResult(
+        bytes32 requestId,
+        PendingRequest memory request,
+        bool isWinner
+    ) external {
+        processLotteryResult(requestId, request, isWinner);
     }
-    
+
     /**
-     * @dev Testing function to bypass security checks
+     * @dev Expose the internal isSecureContext function for testing
      */
-    function testProcessLottery(address user, uint256 wsAmount) external {
-        // Request randomness directly
-        bytes32 requestId = verifier.requestRandomness();
-        
-        // Calculate probability
-        uint256 baseProbability = calculateBaseProbability(wsAmount);
-        uint256 probability = applyPityBoost(baseProbability);
-        
-        // Store request
-        pendingRequests[requestId] = PendingRequest({
-            user: user,
-            wsAmount: wsAmount,
-            probability: probability
-        });
-        
-        emit RandomnessRequested(requestId, user, wsAmount);
+    function testIsSecureContext(address user) external view returns (bool) {
+        return isSecureContext(user);
     }
 } 
