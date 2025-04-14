@@ -3,8 +3,9 @@
  * 
  * This script deploys the core contracts for the RedDragon ecosystem:
  * 1. RedDragon token (or uses a mock for testing)
- * 2. ve8020 voting escrow token
- * 3. Ve8020FeeDistributor for reward distribution
+ * 2. wrappedSonic token (wS) for rewards
+ * 3. ve8020 voting escrow token
+ * 4. Ve8020FeeDistributor for reward distribution
  */
 
 const { ethers } = require("hardhat");
@@ -18,6 +19,7 @@ async function main() {
   console.log("Account balance:", (await deployer.getBalance()).toString());
 
   let rewardToken;
+  let wrappedSonic;
   
   // Check if we're in development or production mode
   const networkName = process.env.HARDHAT_NETWORK || "hardhat";
@@ -31,9 +33,18 @@ async function main() {
     await rewardToken.deployed();
     console.log("📝 RedDragon token (mock) deployed to:", rewardToken.address);
     
+    // Deploy mock wrappedSonic token
+    console.log("🔨 Development mode: Deploying mock wrappedSonic token");
+    wrappedSonic = await MockERC20.deploy("Wrapped Sonic", "wS", 18);
+    await wrappedSonic.deployed();
+    console.log("📝 wrappedSonic token (mock) deployed to:", wrappedSonic.address);
+    
     // Mint some tokens to the deployer for testing
     await rewardToken.mint(deployer.address, ethers.utils.parseEther("1000000"));
-    console.log("💰 Minted 1,000,000 tokens to deployer for testing");
+    console.log("💰 Minted 1,000,000 RedDragon tokens to deployer for testing");
+    
+    await wrappedSonic.mint(deployer.address, ethers.utils.parseEther("1000000"));
+    console.log("💰 Minted 1,000,000 wS tokens to deployer for testing");
   } else {
     // In production, use existing RedDragon token address
     console.log("🚀 Production mode: Using existing RedDragon token");
@@ -43,6 +54,15 @@ async function main() {
     }
     rewardToken = await ethers.getContractAt("IERC20", tokenAddress);
     console.log("📝 Using RedDragon token at:", rewardToken.address);
+    
+    // In production, use existing wrappedSonic token address
+    console.log("🚀 Production mode: Using existing wrappedSonic token");
+    const wSAddress = process.env.WRAPPED_SONIC_ADDRESS;
+    if (!wSAddress) {
+      throw new Error("Please set WRAPPED_SONIC_ADDRESS in your environment variables");
+    }
+    wrappedSonic = await ethers.getContractAt("IERC20", wSAddress);
+    console.log("📝 Using wrappedSonic token at:", wrappedSonic.address);
   }
 
   // Deploy the ve8020 token
@@ -57,7 +77,7 @@ async function main() {
   const Ve8020FeeDistributor = await ethers.getContractFactory("Ve8020FeeDistributor");
   const feeDistributor = await Ve8020FeeDistributor.deploy(
     ve8020.address,
-    rewardToken.address
+    wrappedSonic.address
   );
   await feeDistributor.deployed();
   console.log("📝 Ve8020FeeDistributor deployed to:", feeDistributor.address);
@@ -66,6 +86,7 @@ async function main() {
   console.log("\n✅ Deployment complete!");
   console.log("======================");
   console.log("RedDragon Token:", rewardToken.address);
+  console.log("wrappedSonic Token (wS):", wrappedSonic.address);
   console.log("ve8020 Token:", ve8020.address);
   console.log("Ve8020FeeDistributor:", feeDistributor.address);
   
@@ -75,6 +96,7 @@ async function main() {
     timestamp: new Date().toISOString(),
     contracts: {
       RedDragon: rewardToken.address,
+      wrappedSonic: wrappedSonic.address,
       ve8020: ve8020.address,
       Ve8020FeeDistributor: feeDistributor.address
     }
