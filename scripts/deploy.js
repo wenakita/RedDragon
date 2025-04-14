@@ -72,6 +72,27 @@ async function main() {
   await ve8020.deployed();
   console.log("📝 ve8020 token deployed to:", ve8020.address);
 
+  // Lock some tokens to initialize voting power
+  console.log("🔒 Locking some tokens to initialize voting power...");
+  
+  if (isDevelopment) {
+    // Get current time and set lock duration to 1 year
+    const currentTime = Math.floor(Date.now() / 1000);
+    const lockDuration = 365 * 24 * 60 * 60; // 1 year in seconds
+    const unlockTime = currentTime + lockDuration;
+    
+    // Approve tokens for locking
+    await rewardToken.approve(ve8020.address, ethers.utils.parseEther("1000"));
+    
+    // Create lock
+    await ve8020.createLock(ethers.utils.parseEther("1000"), unlockTime);
+    console.log("📝 Locked 1,000 tokens for 1 year to initialize voting power");
+    
+    // Check voting power
+    const totalVotingPower = await ve8020.totalVotingPower();
+    console.log(`📊 Total voting power initialized: ${ethers.utils.formatEther(totalVotingPower)}`);
+  }
+
   // Deploy the fee distributor
   console.log("🔄 Deploying Ve8020FeeDistributor...");
   const Ve8020FeeDistributor = await ethers.getContractFactory("Ve8020FeeDistributor");
