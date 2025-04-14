@@ -1,42 +1,38 @@
-# Node modules
+# Node
 node_modules/
+npm-debug.log
+package-lock.json
+
+# Hardhat
+artifacts/
+cache/
+coverage/
+coverage.json
+.openzeppelin/
 
 # Environment variables
 .env
+.env.local
+.env.*.local
 
-# Hardhat files
-cache/
-artifacts/
-typechain-types/
-
-# Coverage files
-coverage/
-coverage.json
-
-# Build files
-dist/
-build/
-
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS specific files
-.DS_Store
-Thumbs.db
-
-# IDE files
+# IDEs and editors
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Deployment notes
-deployment-notes.md
+# OS
+.DS_Store
+Thumbs.db
 
-# Private keys and mnemonics
-*.secret
-mnemonic.txt 
+# Deployment
+deployed-addresses.json
+deployment.log
+
+# Testing
+*.log
+gas-report.txt
+
+# Misc
+.notes
+.todo 

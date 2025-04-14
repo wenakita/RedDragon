@@ -5,74 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-
-/**
- * @title IBalancerVault
- * @dev Interface for interacting with Balancer/Beets Vault
- */
-interface IBalancerVault {
-    enum JoinKind { INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT }
-    enum ExitKind { EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT }
-    
-    function joinPool(
-        bytes32 poolId,
-        address sender,
-        address recipient,
-        JoinPoolRequest memory request
-    ) external payable;
-    
-    function exitPool(
-        bytes32 poolId,
-        address sender,
-        address recipient,
-        ExitPoolRequest memory request
-    ) external;
-    
-    struct JoinPoolRequest {
-        address[] assets;
-        uint256[] maxAmountsIn;
-        bytes userData;
-        bool fromInternalBalance;
-    }
-    
-    struct ExitPoolRequest {
-        address[] assets;
-        uint256[] minAmountsOut;
-        bytes userData;
-        bool toInternalBalance;
-    }
-    
-    function getPoolTokens(bytes32 poolId) external view returns (
-        address[] memory tokens,
-        uint256[] memory balances,
-        uint256 lastChangeBlock
-    );
-}
-
-/**
- * @title IBalancerWeightedPoolFactory
- * @dev Interface for creating Balancer/Beets weighted pools
- */
-interface IBalancerWeightedPoolFactory {
-    function create(
-        string memory name,
-        string memory symbol,
-        address[] memory tokens,
-        uint256[] memory weights,
-        uint256 swapFeePercentage,
-        address owner
-    ) external returns (address);
-}
-
-/**
- * @title IRedDragonLPBurner
- * @dev Interface for the RedDragonLPBurner contract
- */
-interface IRedDragonLPBurner {
-    function splitAndBurnLPTokens(address lpToken, uint256 amount) external returns (uint256 burnAmount, uint256 feeCollectorAmount);
-    function burnLPTokens(address lpToken, uint256 amount) external returns (bool);
-    function directBurnLPTokens(address lpToken, uint256 amount) external returns (bool);
-}
+import "../interfaces/IBalancerVault.sol";
+import "../interfaces/IBalancerWeightedPoolFactory.sol";
 
 /**
  * @title MockRedDragonBalancerIntegration
@@ -91,15 +25,12 @@ contract MockRedDragonBalancerIntegration is Ownable, ReentrancyGuard {
     address public dragonToken;
     address public pairedToken; // Usually a stablecoin or wSONC
     
-    // LP Burner contract
-    address public lpBurner;
-    
     // Events
     event PoolCreated(address poolAddress, bytes32 poolId);
     event LiquidityAdded(uint256 dragonAmount, uint256 pairedTokenAmount, uint256 lpAmount);
     event LiquidityRemoved(uint256 dragonAmount, uint256 pairedTokenAmount, uint256 lpAmount);
     event PoolFeeUpdated(uint256 newFee);
-    event PoolBurned(uint256 burnAmount, uint256 feeCollectorAmount);
+    event EmergencyWithdrawal(address token, uint256 amount);
     
     /**
      * @dev Constructor
@@ -107,26 +38,22 @@ contract MockRedDragonBalancerIntegration is Ownable, ReentrancyGuard {
      * @param _weightedPoolFactory Address of Weighted Pool Factory
      * @param _dragonToken Address of DRAGON token
      * @param _pairedToken Address of paired token (stablecoin or wSONC)
-     * @param _lpBurner Address of LP Burner contract
      */
     constructor(
         address _balancerVault,
         address _weightedPoolFactory,
         address _dragonToken,
-        address _pairedToken,
-        address _lpBurner
+        address _pairedToken
     ) {
         require(_balancerVault != address(0), "Invalid Vault address");
         require(_weightedPoolFactory != address(0), "Invalid Factory address");
         require(_dragonToken != address(0), "Invalid DRAGON token address");
         require(_pairedToken != address(0), "Invalid paired token address");
-        require(_lpBurner != address(0), "Invalid LP Burner address");
         
         balancerVault = _balancerVault;
         weightedPoolFactory = _weightedPoolFactory;
         dragonToken = _dragonToken;
         pairedToken = _pairedToken;
-        lpBurner = _lpBurner;
     }
     
     /**
@@ -343,30 +270,6 @@ contract MockRedDragonBalancerIntegration is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Burns pool tokens and sends a portion to fee collector according to LP Burner settings
-     * @param bptAmount Amount of BPT to process
-     * @return burnAmount Amount of BPT sent to dead address
-     * @return feeCollectorAmount Amount of BPT sent to fee collector
-     */
-    function burnPoolTokens(uint256 bptAmount) external nonReentrant returns (uint256 burnAmount, uint256 feeCollectorAmount) {
-        require(poolAddress != address(0), "Pool not created");
-        require(bptAmount > 0, "Zero amount");
-        
-        // Transfer BPT to this contract
-        IERC20(poolAddress).safeTransferFrom(msg.sender, address(this), bptAmount);
-        
-        // Approve BPT to LP Burner
-        IERC20(poolAddress).safeApprove(lpBurner, bptAmount);
-        
-        // Use the LP Burner to split and burn the tokens
-        // This will burn a percentage and send the rest to the fee collector
-        (burnAmount, feeCollectorAmount) = IRedDragonLPBurner(lpBurner).splitAndBurnLPTokens(poolAddress, bptAmount);
-        
-        emit PoolBurned(burnAmount, feeCollectorAmount);
-        return (burnAmount, feeCollectorAmount);
-    }
-    
-    /**
      * @dev Get the current balance of the pool
      * @return tokens The tokens in the pool
      * @return balances The balances of each token in the pool
@@ -389,5 +292,6 @@ contract MockRedDragonBalancerIntegration is Ownable, ReentrancyGuard {
         require(amount > 0, "Zero amount");
         
         IERC20(token).transfer(owner(), amount);
+        emit EmergencyWithdrawal(token, amount);
     }
 } 

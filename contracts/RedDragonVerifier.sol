@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IRedDragon.sol";
 import "./interfaces/IRedDragonSwapLottery.sol";
-import "./interfaces/IRedDragonLPBurner.sol";
 
 /**
  * @title RedDragonVerifier Contract
@@ -18,7 +17,6 @@ contract RedDragonVerifier is Ownable {
     // Contract addresses
     address public redDragonToken;
     address public redDragonLottery;
-    address public redDragonLPBurner;
     address public lpToken;
     
     // Dead address for burn verification
@@ -33,7 +31,6 @@ contract RedDragonVerifier is Ownable {
     event ContractAddressChanged(string contractName, address newAddress);
     event RedDragonTokenSet(address indexed tokenAddress);
     event LotteryAddressSet(address indexed lotteryAddress);
-    event LpBurnerAddressSet(address indexed lpBurnerAddress);
     event LpTokenAddressSet(address indexed lpTokenAddress);
     event ContractPaused(bool isPaused);
     event TimelockProposed(bytes32 indexed operationId, string operation, uint256 expirationTime);
@@ -44,25 +41,21 @@ contract RedDragonVerifier is Ownable {
      * @dev Constructor to initialize the verifier with contract addresses
      * @param _redDragonToken Address of the RedDragon token contract
      * @param _redDragonLottery Address of the lottery contract (can be zero address if not deployed yet)
-     * @param _redDragonLPBurner Address of the LP burner contract (can be zero address if not deployed yet)
      * @param _lpToken Address of the LP token (can be zero address if not deployed yet)
      */
     constructor(
         address _redDragonToken,
         address _redDragonLottery,
-        address _redDragonLPBurner,
         address _lpToken
     ) {
         require(_redDragonToken != address(0), "RedDragon token address cannot be zero");
         
         redDragonToken = _redDragonToken;
         redDragonLottery = _redDragonLottery;
-        redDragonLPBurner = _redDragonLPBurner;
         lpToken = _lpToken;
          
         emit RedDragonTokenSet(_redDragonToken);
         if (_redDragonLottery != address(0)) emit LotteryAddressSet(_redDragonLottery);
-        if (_redDragonLPBurner != address(0)) emit LpBurnerAddressSet(_redDragonLPBurner);
         if (_lpToken != address(0)) emit LpTokenAddressSet(_lpToken);
     }
     
@@ -98,13 +91,11 @@ contract RedDragonVerifier is Ownable {
      * @dev Update contract addresses
      * @param _redDragonToken RedDragon token address (set to zero to keep current)
      * @param _redDragonLottery Lottery address (set to zero to keep current)
-     * @param _redDragonLPBurner LP burner address (set to zero to keep current)
      * @param _lpToken LP token address (set to zero to keep current)
      */
     function updateContractAddresses(
         address _redDragonToken,
         address _redDragonLottery,
-        address _redDragonLPBurner,
         address _lpToken
     ) external onlyOwner whenNotPaused {
         if (_redDragonToken != address(0)) {
@@ -117,12 +108,6 @@ contract RedDragonVerifier is Ownable {
             redDragonLottery = _redDragonLottery;
             emit ContractAddressChanged("RedDragonLottery", _redDragonLottery);
             emit LotteryAddressSet(_redDragonLottery);
-        }
-        
-        if (_redDragonLPBurner != address(0)) {
-            redDragonLPBurner = _redDragonLPBurner;
-            emit ContractAddressChanged("RedDragonLPBurner", _redDragonLPBurner);
-            emit LpBurnerAddressSet(_redDragonLPBurner);
         }
         
         if (_lpToken != address(0)) {
@@ -175,26 +160,6 @@ contract RedDragonVerifier is Ownable {
     }
     
     /**
-     * @dev Set the LP burner address
-     * @param _redDragonLPBurner New LP burner address
-     */
-    function setRedDragonLPBurner(address _redDragonLPBurner) external onlyOwner timelockExpired(keccak256(abi.encodePacked("setRedDragonLPBurner", _redDragonLPBurner))) {
-        redDragonLPBurner = _redDragonLPBurner;
-        emit LpBurnerAddressSet(_redDragonLPBurner);
-        emit TimelockExecuted(keccak256(abi.encodePacked("setRedDragonLPBurner", _redDragonLPBurner)), "setRedDragonLPBurner");
-    }
-    
-    /**
-     * @dev Propose to update the LP burner address
-     * @param _redDragonLPBurner New LP burner address
-     */
-    function proposeRedDragonLPBurner(address _redDragonLPBurner) external onlyOwner whenNotPaused {
-        bytes32 operationId = keccak256(abi.encodePacked("setRedDragonLPBurner", _redDragonLPBurner));
-        timelockExpirations[operationId] = block.timestamp + TIMELOCK_PERIOD;
-        emit TimelockProposed(operationId, "setRedDragonLPBurner", timelockExpirations[operationId]);
-    }
-    
-    /**
      * @dev Set the LP token address
      * @param _lpToken New LP token address
      */
@@ -234,250 +199,121 @@ contract RedDragonVerifier is Ownable {
     }
     
     /**
-     * @dev Get verified lottery information
+     * @dev Get lottery and token information in a single call
      * @return lotteryExists Whether the lottery contract exists
-     * @return currentJackpot Current jackpot amount
-     * @return totalWinners Total number of winners
-     * @return totalPayouts Total amount paid out
-     * @return lastWinner Address of the last winner
-     * @return lastWinAmount Amount won by the last winner
-     * @return isVrfEnabled Whether VRF is enabled
-     * @return vrfCoordinator Address of VRF coordinator
-     * @return vrfKeyHash VRF key hash
-     * @return vrfSubscriptionId VRF subscription ID
+     * @return lotteryEnabled Whether the lottery is enabled
+     * @return potSize Current jackpot size
+     * @return jackpotTokenSymbol Symbol of the jackpot token
+     * @return tokenDecimals Decimals of the token
+     * @return tokenTotalSupply Total supply of the token
      */
-    function getLotteryVerification() external view whenNotPaused onlyEOA returns (
+    function getTokenAndLotteryInfo() external view returns (
         bool lotteryExists,
-        uint256 currentJackpot,
-        uint256 totalWinners,
-        uint256 totalPayouts,
-        address lastWinner,
-        uint256 lastWinAmount,
-        bool isVrfEnabled,
-        address vrfCoordinator,
-        bytes32 vrfKeyHash,
-        uint64 vrfSubscriptionId
+        bool lotteryEnabled,
+        uint256 potSize,
+        string memory jackpotTokenSymbol,
+        uint8 tokenDecimals,
+        uint256 tokenTotalSupply
     ) {
+        // Check lottery
         lotteryExists = (redDragonLottery != address(0));
         
         if (lotteryExists) {
-            // Get jackpot and stats
-            currentJackpot = IRedDragonSwapLottery(redDragonLottery).getCurrentJackpot();
-            (totalWinners, totalPayouts, ) = IRedDragonSwapLottery(redDragonLottery).getStats();
-            
-            // Get winner information
-            try IRedDragonSwapLottery(redDragonLottery).getLastWinner() returns (address winner) {
-                lastWinner = winner;
-            } catch {}
-            
-            try IRedDragonSwapLottery(redDragonLottery).getLastWinAmount() returns (uint256 winAmount) {
-                lastWinAmount = winAmount;
-            } catch {}
-            
-            // Get VRF information
-            try IRedDragonSwapLottery(redDragonLottery).isVrfEnabled() returns (bool vrfEnabled) {
-                isVrfEnabled = vrfEnabled;
-            } catch {}
-            
-            if (isVrfEnabled) {
-                try IRedDragonSwapLottery(redDragonLottery).getVrfConfiguration() returns (
-                    address _vrfCoordinator,
-                    bytes32 _vrfKeyHash,
-                    uint64 _vrfSubscriptionId
-                ) {
-                    vrfCoordinator = _vrfCoordinator;
-                    vrfKeyHash = _vrfKeyHash;
-                    vrfSubscriptionId = _vrfSubscriptionId;
-                } catch {}
+            try IRedDragonSwapLottery(redDragonLottery).isLotteryEnabled() returns (bool enabled) {
+                lotteryEnabled = enabled;
+            } catch {
+                lotteryEnabled = false;
             }
+            
+            try IRedDragonSwapLottery(redDragonLottery).getCurrentJackpot() returns (uint256 jackpot) {
+                potSize = jackpot;
+            } catch {
+                potSize = 0;
+            }
+            
+            try IRedDragonSwapLottery(redDragonLottery).getJackpotTokenSymbol() returns (string memory symbol) {
+                jackpotTokenSymbol = symbol;
+            } catch {
+                jackpotTokenSymbol = "Unknown";
+            }
+        }
+        
+        // Get token info
+        try IERC20Metadata(redDragonToken).decimals() returns (uint8 decimals) {
+            tokenDecimals = decimals;
+        } catch {
+            tokenDecimals = 18; // Default to 18 if not available
+        }
+        
+        try IERC20(redDragonToken).totalSupply() returns (uint256 totalSupply) {
+            tokenTotalSupply = totalSupply;
+        } catch {
+            tokenTotalSupply = 0;
         }
     }
     
     /**
-     * @dev Get liquidity burn verification information
-     * @return burnerExists Whether the LP burner contract exists
-     * @return totalLpBurned Total amount of LP tokens burned
-     * @return lpTotalSupply Total supply of LP tokens
-     * @return burnedLpPercentage Percentage of total LP tokens that are burned (in basis points)
-     * @return isEnoughBurned Whether enough LP tokens are burned (minimum 10%)
-     * @return tokenTotalSupply Total supply of the token
+     * @dev Verify security status of the token
+     * @return hasOwnership Whether the token has an owner
+     * @return hasLottery Whether the lottery exists
+     * @return lotterySecure Whether the lottery uses secure randomness
      */
-    function getLiquidityBurnVerification() external view whenNotPaused returns (
-        bool burnerExists,
-        uint256 totalLpBurned,
-        uint256 lpTotalSupply,
-        uint256 burnedLpPercentage,
-        bool isEnoughBurned,
-        uint256 tokenTotalSupply
+    function verifySecurityStatus() external view whenNotPaused returns (
+        bool hasOwnership,
+        bool hasLottery,
+        bool lotterySecure
     ) {
-        burnerExists = (redDragonLPBurner != address(0) && lpToken != address(0));
-        
-        if (burnerExists) {
-            // Get LP token burn information
-            totalLpBurned = IERC20(lpToken).balanceOf(DEAD_ADDRESS);
-            lpTotalSupply = IERC20(lpToken).totalSupply();
-            
-            // Calculate percentage burned (in basis points, 100 = 1%)
-            if (lpTotalSupply > 0) {
-                burnedLpPercentage = (totalLpBurned * 10000) / lpTotalSupply;
-            }
-            
-            // Check if enough LP is burned (at least a minimum required amount)
-            uint256 requiredPercentage = 1000; // 10%
-            isEnoughBurned = (burnedLpPercentage >= requiredPercentage);
-            
-            // Get token supply information
-            tokenTotalSupply = IRedDragon(redDragonToken).totalSupply();
-        }
-    }
-    
-    /**
-     * @dev Check if token passes basic security standards
-     * @return feesWithinLimits Whether fees are within reasonable limits
-     * @return hasOwnershipTimelock Whether the contract has an ownership timelock
-     * @return hasLiquidityBurned Whether liquidity is burned
-     * @return liquidityBurnAdequate Whether the liquidity burn is adequate (>10% of LP tokens)
-     * @return hasAdminTimelock Whether admin functions have a timelock
-     * @return securityScore Overall security score (out of 100)
-     */
-    function checkSecurityStandards() external view whenNotPaused returns (
-        bool feesWithinLimits,
-        bool hasOwnershipTimelock,
-        bool hasLiquidityBurned,
-        bool liquidityBurnAdequate,
-        bool hasAdminTimelock,
-        uint256 securityScore
-    ) {
-        // Check fees are within reasonable limits
-        (
-            ,
-            ,
-            ,
-            ,
-            uint256 totalFeeBuy,
-            ,
-            ,
-            ,
-            ,
-            uint256 totalFeeSell
-        ) = IRedDragon(redDragonToken).getDetailedFeeInfo();
-        
-        feesWithinLimits = (totalFeeBuy <= 1500 && totalFeeSell <= 1500); // 15% or less
-        
-        // Check ownership status
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            hasOwnershipTimelock
-        ) = IRedDragon(redDragonToken).getContractConfiguration();
-        
-        // Check liquidity burn
-        bool burnerExists = (redDragonLPBurner != address(0) && lpToken != address(0));
-        
-        if (burnerExists) {
-            uint256 totalLpBurned = IERC20(lpToken).balanceOf(DEAD_ADDRESS);
-            hasLiquidityBurned = (totalLpBurned > 0);
-            
-            // Check if burn is adequate (at least 10% of LP tokens)
-            uint256 lpTotalSupply = IERC20(lpToken).totalSupply();
-            if (lpTotalSupply > 0) {
-                uint256 burnedLpPercentage = (totalLpBurned * 10000) / lpTotalSupply;
-                liquidityBurnAdequate = (burnedLpPercentage >= 1000); // 10% or more
-            } else {
-                liquidityBurnAdequate = false;
-            }
-        } else {
-            hasLiquidityBurned = false;
-            liquidityBurnAdequate = false;
+        // Check basic ownership (though not perfect, provides basic check)
+        try Ownable(redDragonToken).owner() returns (address tokenOwner) {
+            hasOwnership = (tokenOwner != address(0));
+        } catch {
+            hasOwnership = false;
         }
         
-        // Check admin timelock
-        hasAdminTimelock = hasOwnershipTimelock; // Same as ownership locked in this case
+        // Check lottery existence
+        hasLottery = (redDragonLottery != address(0));
         
-        // Calculate security score (out of 100)
-        securityScore = 0;
-        
-        // Fees within limits: 20 points
-        if (feesWithinLimits) securityScore += 20;
-        
-        // Ownership timelock: 25 points
-        if (hasOwnershipTimelock) securityScore += 25;
-        
-        // Has liquidity burned: 25 points
-        if (hasLiquidityBurned) securityScore += 25;
-        
-        // Liquidity burn adequate: 15 points
-        if (liquidityBurnAdequate) securityScore += 15;
-        
-        // Admin timelock: 15 points
-        if (hasAdminTimelock) securityScore += 15;
-    }
-    
-    /**
-     * @dev Verify if LP tokens have been burned (community verification method)
-     * @param requiredPercentage Percentage of LP tokens required to be burned (in basis points, 100 = 1%)
-     * @return burnPercentage Actual percentage of LP tokens burned
-     * @return isEnough Whether enough LP tokens are burned as per the requirement
-     */
-    function verifyLpBurn(uint256 requiredPercentage) external view whenNotPaused returns (uint256 burnPercentage, bool isEnough) {
-        require(lpToken != address(0), "LP token not set");
-        require(requiredPercentage <= 10000, "Percentage cannot exceed 100%");
-        
-        uint256 totalLpBurned = IERC20(lpToken).balanceOf(DEAD_ADDRESS);
-        uint256 lpTotalSupply = IERC20(lpToken).totalSupply();
-        
-        if (lpTotalSupply > 0) {
-            burnPercentage = (totalLpBurned * 10000) / lpTotalSupply;
-            isEnough = (burnPercentage >= requiredPercentage);
-        } else {
-            burnPercentage = 0;
-            isEnough = false;
+        // Check lottery security (if it exists)
+        if (hasLottery) {
+            try this.checkVrfSecurity() returns (bool hasVrfEnabled, address vrfCoordinatorAddress) {
+                lotterySecure = hasVrfEnabled && vrfCoordinatorAddress != address(0);
+            } catch {
+                lotterySecure = false;
+            }
         }
     }
     
     /**
      * @dev Check if randomness is secure (using VRF)
-     * @return isRandomnessSecure Whether randomness is secure
      * @return hasVrfEnabled Whether VRF is enabled
      * @return vrfCoordinatorAddress Address of the VRF coordinator
-     * @return vrfContractSetup Whether VRF contracts are properly set up
      */
-    function checkRandomnessSecurity() external view whenNotPaused onlyEOA returns (
-        bool isRandomnessSecure,
+    function checkVrfSecurity() external view whenNotPaused returns (
         bool hasVrfEnabled,
-        address vrfCoordinatorAddress,
-        bool vrfContractSetup
+        address vrfCoordinatorAddress
     ) {
-        bool lotteryExists = (redDragonLottery != address(0));
+        require(redDragonLottery != address(0), "Lottery not configured");
         
-        if (lotteryExists) {
-            // Check if VRF is enabled
-            try IRedDragonSwapLottery(redDragonLottery).isVrfEnabled() returns (bool vrfEnabled) {
-                hasVrfEnabled = vrfEnabled;
-            } catch {}
+        // Try to get VRF configuration
+        try IRedDragonSwapLottery(redDragonLottery).isVrfEnabled() returns (bool vrfEnabled) {
+            hasVrfEnabled = vrfEnabled;
             
-            // Get VRF coordinator address
             if (hasVrfEnabled) {
                 try IRedDragonSwapLottery(redDragonLottery).getVrfConfiguration() returns (
-                    address _vrfCoordinator,
-                    bytes32 ,
-                    uint64 
+                    address vrfCoordinator,
+                    bytes32 vrfKeyHash,
+                    uint64 vrfSubscriptionId
                 ) {
-                    vrfCoordinatorAddress = _vrfCoordinator;
-                    
-                    // Check if VRF contracts are properly set up
-                    vrfContractSetup = (vrfCoordinatorAddress != address(0));
-                    
-                    // Randomness is secure if VRF is enabled and properly set up
-                    isRandomnessSecure = hasVrfEnabled && vrfContractSetup;
-                } catch {}
+                    vrfCoordinatorAddress = vrfCoordinator;
+                } catch {
+                    // If we can't get the configuration, set to default values
+                    vrfCoordinatorAddress = address(0);
+                }
             }
+        } catch {
+            // If the contract doesn't support VRF, set to default values
+            hasVrfEnabled = false;
+            vrfCoordinatorAddress = address(0);
         }
     }
 } 

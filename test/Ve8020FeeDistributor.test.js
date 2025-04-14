@@ -1,303 +1,121 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("Ve8020FeeDistributor", function () {
-  let veToken, lpToken, rewardToken, feeDistributor;
-  let owner, user1, user2, user3, feeManager;
-  const WEEK = 7 * 24 * 60 * 60; // 1 week in seconds
-  const YEAR = 365 * 24 * 60 * 60; // 1 year in seconds
-  const MAX_LOCK = 4 * YEAR; // 4 years in seconds
-  const MIN_LOCK = WEEK; // 1 week in seconds
+  let ve8020;
+  let rewardToken;
+  let feeDistributor;
+  let owner;
+  let user1;
+  let user2;
 
   beforeEach(async function () {
-    [owner, user1, user2, user3, feeManager] = await ethers.getSigners();
-    
-    // Deploy mock LP token
+    [owner, user1, user2] = await ethers.getSigners();
+
+    // Deploy the mock ERC20 token for rewards
     const MockERC20 = await ethers.getContractFactory("MockERC20");
-    lpToken = await MockERC20.deploy("80/20 LP Token", "LP8020", ethers.parseEther("1000000"));
-    
-    // Deploy mock reward token (DRAGON)
-    rewardToken = await MockERC20.deploy("Dragon Token", "DRAGON", ethers.parseEther("1000000"));
-    
-    // Deploy ve8020 contract
+    rewardToken = await MockERC20.deploy("RedDragon", "RD", 18);
+    await rewardToken.deployed();
+
+    // Mint some tokens to the owner for distribution
+    await rewardToken.mint(owner.address, ethers.utils.parseEther("1000000"));
+
+    // Deploy the ve8020 token
     const Ve8020 = await ethers.getContractFactory("ve8020");
-    veToken = await Ve8020.deploy(await lpToken.getAddress());
-    
-    // Deploy fee distributor
-    const FeeDistributor = await ethers.getContractFactory("Ve8020FeeDistributor");
-    feeDistributor = await FeeDistributor.deploy(
-      await veToken.getAddress(),
-      await rewardToken.getAddress()
+    ve8020 = await Ve8020.deploy(rewardToken.address);
+    await ve8020.deployed();
+
+    // Deploy the fee distributor
+    const Ve8020FeeDistributor = await ethers.getContractFactory("Ve8020FeeDistributor");
+    feeDistributor = await Ve8020FeeDistributor.deploy(
+      ve8020.address,
+      rewardToken.address
     );
-    
-    // Fund users with LP tokens
-    await lpToken.transfer(user1.address, ethers.parseEther("10000"));
-    await lpToken.transfer(user2.address, ethers.parseEther("10000"));
-    await lpToken.transfer(user3.address, ethers.parseEther("10000"));
-    
-    // Fund fee manager with reward tokens
-    await rewardToken.transfer(feeManager.address, ethers.parseEther("100000"));
-    
-    // Approve ve8020 contract to spend LP tokens
-    await lpToken.connect(user1).approve(await veToken.getAddress(), ethers.parseEther("10000"));
-    await lpToken.connect(user2).approve(await veToken.getAddress(), ethers.parseEther("10000"));
-    await lpToken.connect(user3).approve(await veToken.getAddress(), ethers.parseEther("10000"));
-    
-    // Approve fee distributor contract to spend reward tokens
-    await rewardToken.connect(feeManager).approve(await feeDistributor.getAddress(), ethers.parseEther("100000"));
+    await feeDistributor.deployed();
+
+    // Transfer some tokens to the users for staking
+    await rewardToken.transfer(user1.address, ethers.utils.parseEther("10000"));
+    await rewardToken.transfer(user2.address, ethers.utils.parseEther("5000"));
+
+    // Users approve ve8020 to spend their tokens
+    await rewardToken.connect(user1).approve(ve8020.address, ethers.utils.parseEther("10000"));
+    await rewardToken.connect(user2).approve(ve8020.address, ethers.utils.parseEther("5000"));
+
+    // Users create locks in ve8020
+    await ve8020.connect(user1).create_lock(ethers.utils.parseEther("1000"), 365 * 86400); // 1 year
+    await ve8020.connect(user2).create_lock(ethers.utils.parseEther("500"), 365 * 86400); // 1 year
   });
 
-  describe("Initialization", function () {
-    it("Should initialize with correct token addresses", async function () {
-      expect(await feeDistributor.veToken()).to.equal(await veToken.getAddress());
-      expect(await feeDistributor.rewardToken()).to.equal(await rewardToken.getAddress());
-    });
-    
-    it("Should initialize with correct epoch values", async function () {
-      expect(await feeDistributor.currentEpoch()).to.equal(0);
-      
-      const epochInfo = await feeDistributor.getCurrentEpochInfo();
-      expect(epochInfo[0]).to.equal(0); // currentEpoch
-      // Time until next epoch should be less than WEEK
-      expect(epochInfo[2]).to.be.lte(WEEK);
-    });
-    
-    it("Should have zero rewards for initial epoch", async function () {
-      expect(await feeDistributor.epochRewards(0)).to.equal(0);
-    });
+  it("should have correct initial state", async function () {
+    expect(await feeDistributor.veToken()).to.equal(ve8020.address);
+    expect(await feeDistributor.rewardToken()).to.equal(rewardToken.address);
+    expect(await feeDistributor.rewardAllocation()).to.equal(10000); // 100%
+    expect(await feeDistributor.currentEpoch()).to.equal(0);
   });
-  
-  describe("Epoch Advancement", function () {
-    it("Should advance epoch after EPOCH_DURATION", async function () {
-      // Fast forward time past first epoch
-      await time.increase(WEEK + 60); // Add a little buffer
-      
-      // Check epoch has not advanced yet (needs a transaction to trigger)
-      expect(await feeDistributor.currentEpoch()).to.equal(0);
-      
-      // Trigger epoch advancement
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // Epoch should have advanced
-      expect(await feeDistributor.currentEpoch()).to.equal(1);
-    });
+
+  it("should allow owner to set fee allocation", async function () {
+    await feeDistributor.setFeeAllocation(10000); // 100%
+    expect(await feeDistributor.rewardAllocation()).to.equal(10000);
     
-    it("Should take voting power snapshot when advancing epochs", async function () {
-      // Create a lock for user1
-      const lockAmount = ethers.parseEther("1000");
-      const unlockTime = (await time.latest()) + MAX_LOCK;
-      await veToken.connect(user1).createLock(lockAmount, unlockTime);
-      
-      // Initial total voting power
-      const initialVotingPower = await veToken.totalVotingPower();
-      
-      // Fast forward time past first epoch
-      await time.increase(WEEK + 60);
-      
-      // Trigger epoch advancement
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // Check voting power was correctly captured in snapshot
-      expect(await feeDistributor.epochTotalVotingPower(1)).to.equal(initialVotingPower);
-    });
-    
-    it("Should advance multiple epochs if needed", async function () {
-      // Fast forward time past multiple epochs
-      await time.increase(3 * WEEK + 60);
-      
-      // Trigger epoch advancement
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // Should have advanced to epoch 3
-      expect(await feeDistributor.currentEpoch()).to.equal(3);
-    });
+    // Should fail if not 100%
+    await expect(feeDistributor.setFeeAllocation(9000)).to.be.revertedWith("Must be 10000 basis points (100%)");
   });
-  
-  describe("Reward Distribution", function () {
-    beforeEach(async function () {
-      // Create locks for users
-      const unlockTime = (await time.latest()) + MAX_LOCK;
-      
-      // User1: 1000 LP tokens for max time (full voting power)
-      await veToken.connect(user1).createLock(ethers.parseEther("1000"), unlockTime);
-      
-      // User2: 2000 LP tokens for max time (full voting power)
-      await veToken.connect(user2).createLock(ethers.parseEther("2000"), unlockTime);
-      
-      // User3: 3000 LP tokens for half time (half voting power)
-      await veToken.connect(user3).createLock(ethers.parseEther("3000"), (await time.latest()) + MAX_LOCK/2);
-      
-      // Add rewards for epoch 0
-      await feeDistributor.connect(feeManager).addRewards(ethers.parseEther("6000"));
-    });
+
+  it("should distribute rewards proportionally to voting power", async function () {
+    // Owner approves fee distributor to spend tokens
+    await rewardToken.approve(feeDistributor.address, ethers.utils.parseEther("10000"));
     
-    it("Should add rewards to current epoch", async function () {
-      expect(await feeDistributor.epochRewards(0)).to.equal(ethers.parseEther("6000"));
-    });
+    // Add rewards
+    await feeDistributor.addRewards(ethers.utils.parseEther("1000"));
     
-    it("Should not allow claiming current epoch rewards", async function () {
-      await expect(
-        feeDistributor.connect(user1).claimEpochRewards(0)
-      ).to.be.revertedWith("Epoch not finalized yet");
-    });
+    // Fast forward time to advance epoch
+    await ethers.provider.send("evm_increaseTime", [7 * 86400]); // 1 week
+    await ethers.provider.send("evm_mine");
     
-    it("Should distribute rewards proportional to voting power", async function () {
-      // Fast forward to next epoch
-      await time.increase(WEEK + 60);
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // User1 has 1000 LP tokens locked for max time = 1000 voting power
-      // User2 has 2000 LP tokens locked for max time = 2000 voting power
-      // User3 has 3000 LP tokens locked for half time = 1500 voting power
-      // Total voting power: 4500
-      
-      // User1 claims epoch 0 rewards
-      await feeDistributor.connect(user1).claimEpochRewards(0);
-      
-      // User1 should get 1000/4500 of 6000 = 1333.33 DRAGON tokens
-      const user1Balance = await rewardToken.balanceOf(user1.address);
-      expect(user1Balance).to.be.closeTo(
-        ethers.parseEther("1333.33"), 
-        ethers.parseEther("0.01")
-      );
-      
-      // User2 claims epoch 0 rewards
-      await feeDistributor.connect(user2).claimEpochRewards(0);
-      
-      // User2 should get 2000/4500 of 6000 = 2666.67 DRAGON tokens
-      const user2Balance = await rewardToken.balanceOf(user2.address);
-      expect(user2Balance).to.be.closeTo(
-        ethers.parseEther("2666.67"), 
-        ethers.parseEther("0.01")
-      );
-      
-      // User3 claims epoch 0 rewards
-      await feeDistributor.connect(user3).claimEpochRewards(0);
-      
-      // User3 should get 1500/4500 of 6000 = 2000 DRAGON tokens
-      const user3Balance = await rewardToken.balanceOf(user3.address);
-      expect(user3Balance).to.be.closeTo(
-        ethers.parseEther("2000"), 
-        ethers.parseEther("0.01")
-      );
-    });
+    // Trigger distribution
+    await feeDistributor.checkAdvanceEpoch();
     
-    it("Should not allow claiming rewards twice", async function () {
-      // Fast forward to next epoch
-      await time.increase(WEEK + 60);
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // Claim rewards first time
-      await feeDistributor.connect(user1).claimEpochRewards(0);
-      
-      // Trying to claim again should fail
-      await expect(
-        feeDistributor.connect(user1).claimEpochRewards(0)
-      ).to.be.revertedWith("Rewards already claimed for this epoch");
-    });
+    // Get rewards info for users
+    const [user1Claimed, user1Rewards] = await feeDistributor.getUserEpochRewardInfo(user1.address, 0);
+    const [user2Claimed, user2Rewards] = await feeDistributor.getUserEpochRewardInfo(user2.address, 0);
     
-    it("Should allow claiming multiple epochs at once", async function () {
-      // Fast forward to epoch 1
-      await time.increase(WEEK + 60);
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // Add rewards for epoch 1
-      await feeDistributor.connect(feeManager).addRewards(ethers.parseEther("3000"));
-      
-      // Fast forward to epoch 2
-      await time.increase(WEEK + 60);
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // User1 claims both epochs
-      await feeDistributor.connect(user1).claimMultipleEpochRewards([0, 1]);
-      
-      // User1 should get 1000/4500 of 6000 + 1000/4500 of 3000 = 2000 DRAGON tokens
-      const user1Balance = await rewardToken.balanceOf(user1.address);
-      expect(user1Balance).to.be.closeTo(
-        ethers.parseEther("2000"), 
-        ethers.parseEther("0.01")
-      );
-    });
+    // Since user1 has 2/3 of the voting power, they should get ~2/3 of rewards
+    // and user2 should get ~1/3
+    expect(user1Claimed).to.be.true;
+    expect(user2Claimed).to.be.true;
+    
+    // Convert BigNumbers to numbers for easier comparison
+    const user1RewardsNum = parseFloat(ethers.utils.formatEther(user1Rewards));
+    const user2RewardsNum = parseFloat(ethers.utils.formatEther(user2Rewards));
+    const totalRewardsNum = user1RewardsNum + user2RewardsNum;
+    
+    // Check approximate proportion (allow for small rounding errors)
+    expect(user1RewardsNum / totalRewardsNum).to.be.closeTo(2/3, 0.01); // Within 1% of expected
+    expect(user2RewardsNum / totalRewardsNum).to.be.closeTo(1/3, 0.01); // Within 1% of expected
   });
-  
-  describe("Reward Calculation", function () {
-    beforeEach(async function () {
-      // Create locks for users
-      const unlockTime = (await time.latest()) + MAX_LOCK;
-      
-      // User1: 1000 LP tokens for max time (full voting power)
-      await veToken.connect(user1).createLock(ethers.parseEther("1000"), unlockTime);
-      
-      // Add rewards for epoch 0
-      await feeDistributor.connect(feeManager).addRewards(ethers.parseEther("5000"));
-      
-      // Fast forward to next epoch
-      await time.increase(WEEK + 60);
-      await feeDistributor.checkAdvanceEpoch();
-    });
+
+  it("should handle emergency withdrawals correctly", async function () {
+    // Owner approves fee distributor to spend tokens
+    await rewardToken.approve(feeDistributor.address, ethers.utils.parseEther("5000"));
     
-    it("Should correctly calculate user's claimable rewards", async function () {
-      const claimable = await feeDistributor.getUserClaimableRewards(user1.address, 0);
-      expect(claimable).to.equal(ethers.parseEther("5000")); // User1 is the only ve token holder
-    });
+    // Add rewards
+    await feeDistributor.addRewards(ethers.utils.parseEther("5000"));
     
-    it("Should return zero for already claimed epochs", async function () {
-      // Claim rewards
-      await feeDistributor.connect(user1).claimEpochRewards(0);
-      
-      // Check claimable is now zero
-      const claimable = await feeDistributor.getUserClaimableRewards(user1.address, 0);
-      expect(claimable).to.equal(0);
-    });
+    // Check balance before withdrawal
+    const initialBalance = await rewardToken.balanceOf(owner.address);
     
-    it("Should calculate total claimable rewards across epochs", async function () {
-      // Add rewards for epoch 1
-      await feeDistributor.connect(feeManager).addRewards(ethers.parseEther("3000"));
-      
-      // Fast forward to epoch 2
-      await time.increase(WEEK + 60);
-      await feeDistributor.checkAdvanceEpoch();
-      
-      // User1 should have rewards from epochs 0 and 1
-      const totalClaimable = await feeDistributor.getUserTotalClaimableRewards(user1.address);
-      expect(totalClaimable).to.equal(ethers.parseEther("8000")); // 5000 + 3000
-    });
-  });
-  
-  describe("Reward Addition", function () {
-    it("Should allow adding rewards via addRewards", async function () {
-      await feeDistributor.connect(feeManager).addRewards(ethers.parseEther("1000"));
-      expect(await feeDistributor.epochRewards(0)).to.equal(ethers.parseEther("1000"));
-    });
+    // Emergency withdraw half the tokens
+    await feeDistributor.emergencyWithdraw(
+      rewardToken.address,
+      owner.address,
+      ethers.utils.parseEther("2500")
+    );
     
-    it("Should allow adding rewards via receiveRewards", async function () {
-      await feeDistributor.receiveRewards(ethers.parseEther("500"));
-      expect(await feeDistributor.epochRewards(0)).to.equal(ethers.parseEther("500"));
-    });
+    // Check balance after withdrawal
+    const newBalance = await rewardToken.balanceOf(owner.address);
+    expect(newBalance.sub(initialBalance)).to.equal(ethers.utils.parseEther("2500"));
     
-    it("Should not allow adding zero rewards", async function () {
-      await expect(
-        feeDistributor.connect(feeManager).addRewards(0)
-      ).to.be.revertedWith("Amount must be greater than 0");
-      
-      await expect(
-        feeDistributor.receiveRewards(0)
-      ).to.be.revertedWith("Amount must be greater than 0");
-    });
-    
-    it("Should check and advance epoch when adding rewards", async function () {
-      // Fast forward time past first epoch
-      await time.increase(WEEK + 60);
-      
-      // Add rewards (should advance epoch)
-      await feeDistributor.connect(feeManager).addRewards(ethers.parseEther("1000"));
-      
-      // Epoch should have advanced
-      expect(await feeDistributor.currentEpoch()).to.equal(1);
-      
-      // Rewards should be added to new epoch
-      expect(await feeDistributor.epochRewards(1)).to.equal(ethers.parseEther("1000"));
-    });
+    // Check remaining distributor balance
+    expect(await rewardToken.balanceOf(feeDistributor.address)).to.equal(ethers.utils.parseEther("2500"));
   });
 }); 

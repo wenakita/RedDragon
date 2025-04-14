@@ -5,9 +5,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "./interfaces/IRedDragonPaintSwapVerifier.sol";
 import "./interfaces/IRedDragonLPBooster.sol";
 import "./interfaces/IPriceOracle.sol";
+import "./interfaces/IVRFConsumer.sol";
 
 /**
  * @dev Interface for the thank you token that grants special boosts
@@ -28,7 +30,7 @@ interface IRedDragonThankYouToken {
  * - Higher boost cap allows for rare but significant jackpots to accumulate
  * - Users' probability is boosted based on their LP token holdings using Curve's boost formula
  */
-contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
+contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsumer {
     using SafeERC20 for IERC20;
 
     // Circuit breaker
@@ -216,7 +218,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
      * @param requestId The ID of the randomness request
      * @param randomWords The random values generated
      */
-    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external whenNotPaused {
+    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external override whenNotPaused {
         require(msg.sender == address(verifier), "Only verifier can fulfill");
         require(randomWords.length > 0, "No random values provided");
 
@@ -878,5 +880,39 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard {
         wrappedSonic.safeTransfer(to, amount);
         
         emit JackpotTransferred(to, amount);
+    }
+
+    /**
+     * @dev Check if VRF is enabled for this contract
+     * @return True if VRF is enabled
+     */
+    function isVrfEnabled() external view override returns (bool) {
+        // VRF is enabled if we have a valid verifier
+        return address(verifier) != address(0);
+    }
+    
+    /**
+     * @dev Get the VRF configuration
+     * @return vrfCoordinatorAddress Address of the VRF coordinator
+     * @return keyHash VRF key hash
+     * @return subscriptionId VRF subscription ID
+     */
+    function getVRFConfiguration() external view override returns (
+        address vrfCoordinatorAddress,
+        bytes32 keyHash,
+        uint64 subscriptionId
+    ) {
+        // Get configuration from the verifier
+        return verifier.getVRFConfiguration();
+    }
+    
+    /**
+     * @dev Request randomness (not used directly, just to satisfy the interface)
+     * @return requestId The ID of the randomness request
+     */
+    function requestRandomness() external override returns (bytes32) {
+        // This lottery doesn't directly request randomness - it's done via the verifier
+        // But we need to implement this for the interface
+        return 0;
     }
 } 
