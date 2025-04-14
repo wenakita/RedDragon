@@ -11,7 +11,7 @@ import "./ve8020.sol";
 /**
  * @title Ve8020FeeDistributor
  * @dev Contract that distributes transaction fees to ve(80/20) holders
- * proportional to their voting power.
+ * proportional to their voting power, and provides liquidity.
  * Distributions happen automatically at the end of each weekly epoch.
  */
 contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
@@ -20,6 +20,7 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     // Core state variables
     ve8020 public veToken;
     IERC20 public rewardToken; // DRAGON token
+    IERC20 public wrappedSonic; // sSonic Wrapper Token
     
     // Mapping of user => epoch => claimed status
     mapping(address => mapping(uint256 => bool)) public userEpochClaimed;
@@ -40,11 +41,21 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     uint256 public epochStartTime;
     
     // Fee allocation percentages (basis points, 100% = 10000)
-    uint256 public rewardAllocation = 10000; // 100% to ve8020 holders
+    uint256 public rewardAllocation = 8000; // 80% to ve8020 holders
+    uint256 public liquidityAllocation = 2000; // 20% to liquidity
+
+    // Liquidity configuration
+    address public lpRouter;
+    mapping(uint256 => uint256) public epochLiquidityAdded;
+    uint256 public totalLiquidityAdded;
     
     // Automatic distribution data
     mapping(address => mapping(uint256 => uint256)) public userEpochRewards;
     mapping(uint256 => address[]) public epochParticipants;
+    
+    // Track active token holders
+    address[] public activeHolders;
+    mapping(address => bool) public isActiveHolder;
     
     // Events - Distribution Events
     event RewardsAdded(uint256 indexed epoch, uint256 amount);
@@ -53,6 +64,12 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     event EpochAdvanced(uint256 indexed epoch, uint256 totalVotingPower);
     event FeesReceived(uint256 totalAmount);
     event AllocationUpdated(uint256 rewardAllocation);
+    event HolderAdded(address indexed holder);
+    event HolderRemoved(address indexed holder);
+    
+    // Events - Liquidity Events
+    event LiquidityAdded(uint256 amount);
+    event LiquidityRouterSet(address indexed router);
     
     // Events - Shared Events
     event EmergencyWithdrawal(address indexed to, uint256 amount, address token);
@@ -61,16 +78,20 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
      * @dev Constructor
      * @param _veToken Address of the ve8020 token
      * @param _rewardToken Address of the reward token (DRAGON)
+     * @param _wrappedSonic Address of the wrapped Sonic token
      */
     constructor(
         address _veToken, 
-        address _rewardToken
+        address _rewardToken,
+        address _wrappedSonic
     ) {
         require(_veToken != address(0), "ve8020 address cannot be zero");
         require(_rewardToken != address(0), "Reward token address cannot be zero");
+        require(_wrappedSonic != address(0), "WrappedSonic address cannot be zero");
         
         veToken = ve8020(_veToken);
         rewardToken = IERC20(_rewardToken);
+        wrappedSonic = IERC20(_wrappedSonic);
         
         // Initialize first epoch
         epochStartTime = block.timestamp;
@@ -81,17 +102,94 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Sets the allocation percentage for fees (kept for backward compatibility)
+     * @dev Sets the allocation percentages for fees
      * @param _rewardAllocation Percentage for ve8020 rewards (basis points)
+     * @param _liquidityAllocation Percentage for liquidity (basis points)
      */
     function setFeeAllocation(
-        uint256 _rewardAllocation
+        uint256 _rewardAllocation,
+        uint256 _liquidityAllocation
     ) external onlyOwner {
-        require(_rewardAllocation == 10000, "Must be 10000 basis points (100%)");
+        require(_rewardAllocation + _liquidityAllocation == 10000, "Must be 10000 basis points (100%)");
         
         rewardAllocation = _rewardAllocation;
+        liquidityAllocation = _liquidityAllocation;
         
         emit AllocationUpdated(rewardAllocation);
+    }
+    
+    /**
+     * @dev Sets the LP router address
+     * @param _router Address of the LP router
+     */
+    function setLpRouter(address _router) external onlyOwner {
+        require(_router != address(0), "Router address cannot be zero");
+        lpRouter = _router;
+        emit LiquidityRouterSet(_router);
+    }
+    
+    /**
+     * @dev Register an address as an active holder
+     * @param _holder Address to register
+     */
+    function registerHolder(address _holder) external {
+        require(_holder != address(0), "Cannot register zero address");
+        
+        // Only allow registration if the address has voting power
+        uint256 votingPower = veToken.balanceOf(_holder);
+        require(votingPower > 0, "Address has no voting power");
+        
+        if (!isActiveHolder[_holder]) {
+            activeHolders.push(_holder);
+            isActiveHolder[_holder] = true;
+            emit HolderAdded(_holder);
+        }
+    }
+    
+    /**
+     * @dev Remove an address from active holders
+     * @param _holder Address to remove
+     */
+    function removeHolder(address _holder) external onlyOwner {
+        require(isActiveHolder[_holder], "Address is not an active holder");
+        
+        // Find index of holder in the array
+        uint256 holderIndex = 0;
+        bool found = false;
+        
+        for (uint256 i = 0; i < activeHolders.length; i++) {
+            if (activeHolders[i] == _holder) {
+                holderIndex = i;
+                found = true;
+                break;
+            }
+        }
+        
+        require(found, "Holder not found in active holders");
+        
+        // Swap with the last element and remove the last element
+        activeHolders[holderIndex] = activeHolders[activeHolders.length - 1];
+        activeHolders.pop();
+        isActiveHolder[_holder] = false;
+        emit HolderRemoved(_holder);
+    }
+    
+    /**
+     * @dev Get the number of active holders
+     * @return Count of active holders
+     */
+    function activeHolderCount() external view returns (uint256) {
+        return activeHolders.length;
+    }
+    
+    /**
+     * @dev Get holder at specific index
+     * @param _index Index in the active holders array
+     * @return Address of holder at that index
+     */
+    function holderAt(uint256 _index) external view returns (address) {
+        require(_index < activeHolders.length, "Index out of bounds");
+        return activeHolders[_index];
     }
     
     /**
@@ -107,11 +205,35 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         // Transfer reward tokens from caller to this contract
         rewardToken.safeTransferFrom(msg.sender, address(this), _amount);
         
-        // All rewards go to current epoch
-        epochRewards[currentEpoch] += _amount;
-        emit RewardsAdded(currentEpoch, _amount);
+        // Process fee distribution according to allocation
+        uint256 rewardAmount = (_amount * rewardAllocation) / 10000;
+        uint256 liquidityAmount = (_amount * liquidityAllocation) / 10000;
+        
+        // Update rewards for current epoch
+        epochRewards[currentEpoch] += rewardAmount;
+        emit RewardsAdded(currentEpoch, rewardAmount);
+        
+        // Process liquidity allocation if enabled
+        if (liquidityAmount > 0 && lpRouter != address(0)) {
+            _addLiquidity(liquidityAmount);
+        }
         
         emit FeesReceived(_amount);
+    }
+    
+    /**
+     * @dev Internal function to add liquidity
+     * @param _amount Amount to add to liquidity
+     */
+    function _addLiquidity(uint256 _amount) internal {
+        // Transfer tokens to LP router
+        rewardToken.safeTransfer(lpRouter, _amount);
+        
+        // Update liquidity stats
+        epochLiquidityAdded[currentEpoch] += _amount;
+        totalLiquidityAdded += _amount;
+        
+        emit LiquidityAdded(_amount);
     }
     
     /**
@@ -124,9 +246,18 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         // Check if epoch needs to be advanced
         checkAdvanceEpoch();
         
-        // All rewards go to current epoch
-        epochRewards[currentEpoch] += _amount;
-        emit RewardsAdded(currentEpoch, _amount);
+        // Process fee distribution according to allocation
+        uint256 rewardAmount = (_amount * rewardAllocation) / 10000;
+        uint256 liquidityAmount = (_amount * liquidityAllocation) / 10000;
+        
+        // Update rewards for current epoch
+        epochRewards[currentEpoch] += rewardAmount;
+        emit RewardsAdded(currentEpoch, rewardAmount);
+        
+        // Process liquidity allocation if enabled
+        if (liquidityAmount > 0 && lpRouter != address(0)) {
+            _addLiquidity(liquidityAmount);
+        }
         
         emit FeesReceived(_amount);
     }
@@ -166,11 +297,11 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         uint256 recipientCount = 0;
         
         // More efficient holder processing
-        uint256 holderCount = veToken.balanceOfHolderCount();
+        uint256 holderCount = activeHolders.length;
         uint256 maxBatchSize = 100; // Process in smaller batches to avoid gas limits
         
         for (uint256 i = 0; i < holderCount && i < maxBatchSize; i++) {
-            address holder = veToken.holderAt(i);
+            address holder = activeHolders[i];
             uint256 votingPower = veToken.balanceOf(holder);
             
             if (votingPower == 0) continue;
@@ -206,33 +337,8 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     /**
      * @dev Get array of active ve8020 holders
      * @return Active holders array
-     * @dev This function is no longer used due to gas optimization
      */
-    function _getActiveHolders() internal view returns (address[] memory) {
-        uint256 holderCount = veToken.balanceOfHolderCount();
-        
-        // Count active holders first to avoid creating oversized arrays
-        uint256 activeCount = 0;
-        for (uint256 i = 0; i < holderCount; i++) {
-            address holder = veToken.holderAt(i);
-            if (veToken.balanceOf(holder) > 0) {
-                activeCount++;
-            }
-        }
-        
-        // Create properly sized array
-        address[] memory activeHolders = new address[](activeCount);
-        
-        // Fill array with active holders
-        uint256 index = 0;
-        for (uint256 i = 0; i < holderCount && index < activeCount; i++) {
-            address holder = veToken.holderAt(i);
-            if (veToken.balanceOf(holder) > 0) {
-                activeHolders[index] = holder;
-                index++;
-            }
-        }
-        
+    function getActiveHolders() external view returns (address[] memory) {
         return activeHolders;
     }
     
@@ -334,14 +440,14 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         uint256 totalVotingPower = epochTotalVotingPower[_epoch];
         if (totalVotingPower == 0) return; // No one to distribute to
         
-        uint256 holderCount = veToken.balanceOfHolderCount();
+        uint256 holderCount = activeHolders.length;
         require(_endIndex <= holderCount, "End index out of bounds");
         
         uint256 distributedAmount = 0;
         uint256 recipientCount = 0;
         
         for (uint256 i = _startIndex; i < _endIndex; i++) {
-            address holder = veToken.holderAt(i);
+            address holder = activeHolders[i];
             if (userEpochClaimed[holder][_epoch]) continue; // Skip if already claimed
             
             uint256 votingPower = veToken.balanceOf(holder);

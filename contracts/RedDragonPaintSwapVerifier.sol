@@ -38,8 +38,6 @@ contract RedDragonPaintSwapVerifier is Ownable, Pausable, ReentrancyGuard, IVRFC
     mapping(address => bytes32) private latestRequestId;
 
     // Events
-    event RandomnessRequested(bytes32 indexed requestId);
-    event RandomnessFulfilled(bytes32 indexed requestId, uint256 randomness);
     event VRFConfigUpdated(address indexed vrfCoordinator, uint64 subscriptionId, bytes32 gasLane);
     event PauseStateChanged(bool isPaused);
     event TimelockOperationProposed(bytes32 indexed operationId, string operation, uint256 expirationTime);
@@ -49,7 +47,7 @@ contract RedDragonPaintSwapVerifier is Ownable, Pausable, ReentrancyGuard, IVRFC
     /**
      * @dev Circuit breaker modifier
      */
-    modifier whenNotPaused() {
+    modifier whenNotPaused() override {
         require(!isPaused, "Contract is paused");
         _;
     }
@@ -103,7 +101,7 @@ contract RedDragonPaintSwapVerifier is Ownable, Pausable, ReentrancyGuard, IVRFC
             revert("VRF coordinator not initialized");
         }
         
-        emit RandomnessRequested(requestId);
+        emit IVRFConsumer.RandomnessRequested(requestId);
         return requestId;
     }
 
@@ -119,8 +117,6 @@ contract RedDragonPaintSwapVerifier is Ownable, Pausable, ReentrancyGuard, IVRFC
 
         randomResults[requestId] = randomWords[0];
         requestFulfilled[requestId] = true;
-
-        emit RandomnessFulfilled(requestId, randomWords[0]);
     }
 
     function getRandomResult(bytes32 requestId) external view returns (uint256) {
@@ -230,24 +226,41 @@ contract RedDragonPaintSwapVerifier is Ownable, Pausable, ReentrancyGuard, IVRFC
     }
 
     /**
+     * @dev Implement the fulfillRandomness method required by IVRFConsumer
+     * @param requestId The request ID of the randomness request
+     * @param randomWords The random values generated
+     */
+    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external override whenNotPaused {
+        // Direct implementation instead of calling another method
+        require(msg.sender == vrfCoordinator, "Only VRF coordinator");
+        require(!requestFulfilled[requestId], "Request already fulfilled");
+        require(randomWords.length > 0, "No random words");
+
+        randomResults[requestId] = randomWords[0];
+        requestFulfilled[requestId] = true;
+
+        emit IVRFConsumer.RandomnessFulfilled(requestId, randomWords[0]);
+    }
+
+    /**
+     * @dev Get the VRF configuration
+     * @return vrfCoordinatorAddress Address of the VRF coordinator
+     * @return keyHash VRF key hash
+     * @return subscriptionId VRF subscription ID
+     */
+    function getVRFConfiguration() external view override returns (
+        address vrfCoordinatorAddress,
+        bytes32 keyHash,
+        uint64 subscriptionId
+    ) {
+        return (vrfCoordinator, gasLane, subscriptionId);
+    }
+
+    /**
      * @dev Check if VRF is enabled for this contract
      * @return True if VRF is enabled
      */
     function isVrfEnabled() external view override returns (bool) {
         return vrfCoordinator != address(0);
-    }
-
-    /**
-     * @dev Get the VRF configuration
-     * @return vrfCoordinator Address of the VRF coordinator
-     * @return hash VRF key hash
-     * @return subId VRF subscription ID
-     */
-    function getVRFConfiguration() external view override returns (
-        address vrfCoordinator,
-        bytes32 hash,
-        uint64 subId
-    ) {
-        return (vrfCoordinator, gasLane, subscriptionId);
     }
 } 
