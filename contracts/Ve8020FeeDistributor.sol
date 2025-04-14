@@ -7,28 +7,11 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./ve8020.sol";
-import "./interfaces/IRouter.sol";
-
-// Interface for ShadowDEX Router
-interface IRouter {
-    function factory() external pure returns (address);
-    function WETH() external pure returns (address);
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity);
-}
 
 /**
  * @title Ve8020FeeDistributor
- * @dev Combined contract that distributes transaction fees to ve(80/20) holders
- * proportional to their voting power and manages liquidity.
+ * @dev Contract that distributes transaction fees to ve(80/20) holders
+ * proportional to their voting power.
  * Distributions happen automatically at the end of each weekly epoch.
  */
 contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
@@ -37,8 +20,6 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     // Core state variables
     ve8020 public veToken;
     IERC20 public rewardToken; // DRAGON token
-    IERC20 public wrappedSonic; // wS token
-    IRouter public router;
     
     // Mapping of user => epoch => claimed status
     mapping(address => mapping(uint256 => bool)) public userEpochClaimed;
@@ -59,18 +40,7 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     uint256 public epochStartTime;
     
     // Fee allocation percentages (basis points, 100% = 10000)
-    uint256 public rewardAllocation = 8000; // 80% to ve8020 holders
-    uint256 public liquidityAllocation = 2000; // 20% to liquidity
-    
-    // Liquidity configuration
-    uint256 public minTokensToLiquidity = 1000 * 10**18; // 1000 tokens min before adding liquidity
-    uint256 public autoLiquidityFrequency = 1 days; // Frequency of automated liquidity additions
-    uint256 public lastLiquidityAddition;
-    
-    // Liquidity statistics
-    uint256 public totalLiquidityAdded;
-    uint256 public totalRedDragonLiquidity;
-    uint256 public totalWrappedSonicLiquidity;
+    uint256 public rewardAllocation = 10000; // 100% to ve8020 holders
     
     // Automatic distribution data
     mapping(address => mapping(uint256 => uint256)) public userEpochRewards;
@@ -81,14 +51,8 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     event RewardsClaimed(address indexed user, uint256 indexed epoch, uint256 amount);
     event RewardsAutomaticallyDistributed(uint256 indexed epoch, uint256 totalAmount, uint256 recipientCount);
     event EpochAdvanced(uint256 indexed epoch, uint256 totalVotingPower);
-    event FeesReceived(uint256 totalAmount, uint256 rewardsAmount, uint256 liquidityAmount);
-    event AllocationUpdated(uint256 rewardAllocation, uint256 liquidityAllocation);
-    
-    // Events - Liquidity Events
-    event LiquidityAdded(uint256 redDragonAmount, uint256 wrappedSonicAmount, uint256 liquidityTokens);
-    event RouterUpdated(address indexed newRouter);
-    event MinTokensToLiquidityUpdated(uint256 newAmount);
-    event AutoLiquidityFrequencyUpdated(uint256 newFrequency);
+    event FeesReceived(uint256 totalAmount);
+    event AllocationUpdated(uint256 rewardAllocation);
     
     // Events - Shared Events
     event EmergencyWithdrawal(address indexed to, uint256 amount, address token);
@@ -97,24 +61,16 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
      * @dev Constructor
      * @param _veToken Address of the ve8020 token
      * @param _rewardToken Address of the reward token (DRAGON)
-     * @param _wrappedSonic Address of the wS token
-     * @param _router Address of the router for liquidity addition
      */
     constructor(
         address _veToken, 
-        address _rewardToken, 
-        address _wrappedSonic,
-        address _router
+        address _rewardToken
     ) {
         require(_veToken != address(0), "ve8020 address cannot be zero");
         require(_rewardToken != address(0), "Reward token address cannot be zero");
-        require(_wrappedSonic != address(0), "wS address cannot be zero");
-        require(_router != address(0), "Router address cannot be zero");
         
         veToken = ve8020(_veToken);
         rewardToken = IERC20(_rewardToken);
-        wrappedSonic = IERC20(_wrappedSonic);
-        router = IRouter(_router);
         
         // Initialize first epoch
         epochStartTime = block.timestamp;
@@ -125,48 +81,17 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Sets the allocation percentages for fees
+     * @dev Sets the allocation percentage for fees (kept for backward compatibility)
      * @param _rewardAllocation Percentage for ve8020 rewards (basis points)
-     * @param _liquidityAllocation Percentage for liquidity (basis points)
      */
     function setFeeAllocation(
-        uint256 _rewardAllocation,
-        uint256 _liquidityAllocation
+        uint256 _rewardAllocation
     ) external onlyOwner {
-        require(_rewardAllocation + _liquidityAllocation == 10000, "Must total 10000 basis points");
+        require(_rewardAllocation == 10000, "Must be 10000 basis points (100%)");
         
         rewardAllocation = _rewardAllocation;
-        liquidityAllocation = _liquidityAllocation;
         
-        emit AllocationUpdated(rewardAllocation, liquidityAllocation);
-    }
-    
-    /**
-     * @dev Sets the router address for liquidity
-     * @param _router Address of the new router
-     */
-    function setRouter(address _router) external onlyOwner {
-        require(_router != address(0), "Router address cannot be zero");
-        router = IRouter(_router);
-        emit RouterUpdated(_router);
-    }
-    
-    /**
-     * @dev Sets the minimum amount of tokens required to add liquidity
-     * @param _minTokensToLiquidity Minimum amount of tokens
-     */
-    function setMinTokensToLiquidity(uint256 _minTokensToLiquidity) external onlyOwner {
-        minTokensToLiquidity = _minTokensToLiquidity;
-        emit MinTokensToLiquidityUpdated(_minTokensToLiquidity);
-    }
-    
-    /**
-     * @dev Sets the frequency for automatic liquidity additions
-     * @param _frequency Frequency in seconds
-     */
-    function setAutoLiquidityFrequency(uint256 _frequency) external onlyOwner {
-        autoLiquidityFrequency = _frequency;
-        emit AutoLiquidityFrequencyUpdated(_frequency);
+        emit AllocationUpdated(rewardAllocation);
     }
     
     /**
@@ -182,23 +107,11 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         // Transfer reward tokens from caller to this contract
         rewardToken.safeTransferFrom(msg.sender, address(this), _amount);
         
-        // Split fees according to allocation
-        uint256 rewardsAmount = (_amount * rewardAllocation) / 10000;
-        uint256 liquidityAmount = _amount - rewardsAmount;
+        // All rewards go to current epoch
+        epochRewards[currentEpoch] += _amount;
+        emit RewardsAdded(currentEpoch, _amount);
         
-        // Add rewards to current epoch
-        if (rewardsAmount > 0) {
-            epochRewards[currentEpoch] += rewardsAmount;
-            emit RewardsAdded(currentEpoch, rewardsAmount);
-        }
-        
-        // Add liquidity if threshold met
-        if (liquidityAmount >= minTokensToLiquidity && 
-            (block.timestamp >= lastLiquidityAddition + autoLiquidityFrequency)) {
-            _addLiquidity(liquidityAmount);
-        }
-        
-        emit FeesReceived(_amount, rewardsAmount, liquidityAmount);
+        emit FeesReceived(_amount);
     }
     
     /**
@@ -211,75 +124,11 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         // Check if epoch needs to be advanced
         checkAdvanceEpoch();
         
-        // Split fees according to allocation
-        uint256 rewardsAmount = (_amount * rewardAllocation) / 10000;
-        uint256 liquidityAmount = _amount - rewardsAmount;
+        // All rewards go to current epoch
+        epochRewards[currentEpoch] += _amount;
+        emit RewardsAdded(currentEpoch, _amount);
         
-        // Add rewards to current epoch
-        if (rewardsAmount > 0) {
-            epochRewards[currentEpoch] += rewardsAmount;
-            emit RewardsAdded(currentEpoch, rewardsAmount);
-        }
-        
-        // Add liquidity if threshold met
-        if (liquidityAmount >= minTokensToLiquidity && 
-            (block.timestamp >= lastLiquidityAddition + autoLiquidityFrequency)) {
-            _addLiquidity(liquidityAmount);
-        }
-        
-        emit FeesReceived(_amount, rewardsAmount, liquidityAmount);
-    }
-    
-    /**
-     * @dev Implementation of liquidity addition
-     * Adds liquidity to the DEX using allocated tokens
-     * @param tokenAmount Amount of DRAGON tokens to use for liquidity
-     */
-    function _addLiquidity(uint256 tokenAmount) internal {
-        require(tokenAmount > 0, "No tokens to add liquidity");
-        
-        // Calculate how much wS to use - typical implementation would get the fair value
-        // For simplicity, we'll use an equal value approach
-        uint256 wrappedSonicBalance = wrappedSonic.balanceOf(address(this));
-        require(wrappedSonicBalance > 0, "No wS tokens to add liquidity");
-        
-        // Use exact amounts for approval instead of entire balance
-        rewardToken.safeApprove(address(router), 0); // Clear previous approval first
-        wrappedSonic.safeApprove(address(router), 0);
-        
-        rewardToken.safeApprove(address(router), tokenAmount);
-        wrappedSonic.safeApprove(address(router), wrappedSonicBalance);
-        
-        // Add liquidity to DEX pair
-        try router.addLiquidity(
-            address(rewardToken),
-            address(wrappedSonic),
-            tokenAmount,
-            wrappedSonicBalance,
-            0, // Accept any amount of RedDragon
-            0, // Accept any amount of wS
-            owner(), // Send LP tokens to owner (multisig)
-            block.timestamp + 600 // 10 minute deadline
-        ) returns (uint256 redDragonAdded, uint256 wrappedSonicAdded, uint256 liquidityTokens) {
-            // Update statistics
-            totalLiquidityAdded += liquidityTokens;
-            totalRedDragonLiquidity += redDragonAdded;
-            totalWrappedSonicLiquidity += wrappedSonicAdded;
-            lastLiquidityAddition = block.timestamp;
-            
-            emit LiquidityAdded(redDragonAdded, wrappedSonicAdded, liquidityTokens);
-        } catch {
-            // If liquidity addition fails, at least clear approvals
-            rewardToken.safeApprove(address(router), 0);
-            wrappedSonic.safeApprove(address(router), 0);
-            
-            // Revert with meaningful error
-            revert("Liquidity addition failed");
-        }
-        
-        // Clear any remaining approval
-        rewardToken.safeApprove(address(router), 0);
-        wrappedSonic.safeApprove(address(router), 0);
+        emit FeesReceived(_amount);
     }
     
     /**
@@ -446,15 +295,6 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         
         tokenContract.safeTransfer(to, withdrawAmount);
         emit EmergencyWithdrawal(to, withdrawAmount, token);
-    }
-    
-    /**
-     * @dev Manually trigger liquidity addition
-     * Only callable by owner
-     */
-    function triggerLiquidityAddition(uint256 amount) external onlyOwner {
-        require(amount > 0, "Amount must be greater than zero");
-        _addLiquidity(amount);
     }
     
     /**
