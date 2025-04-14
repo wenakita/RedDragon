@@ -1,43 +1,49 @@
-# RedDragon Token & Ve8020 Ecosystem
+# RedDragon Token Ecosystem
 
-This repository contains the smart contracts for the RedDragon token ecosystem and the Ve8020 staking system.
+This repository contains the smart contracts for the RedDragon token ecosystem, including the ve8020 token and fee distribution system.
 
-## Key Components
+## Overview
 
-### Core Contracts
+The RedDragon ecosystem consists of the following core contracts:
 
-- **RedDragon Token**: The main ERC-20 token
-- **Ve8020**: Vote-escrow token implementation for staking and governance
-- **Ve8020FeeDistributor**: Distributes fees between rewards and liquidity
+- `RedDragon.sol`: The main ERC20 token
+- `ve8020.sol`: The voting escrow token for governance and rewards
+- `Ve8020FeeDistributor.sol`: Contract for distributing rewards to ve8020 holders
 
-### Utility Contracts
+## Key Features
 
-- **RedDragonBalancerIntegration**: Manages 80/20 Balancer/Beets liquidity pools
-- **RedDragonPaintSwapVerifier**: VRF randomness verification
-- **RedDragonSwapLottery**: Lottery system for $wS/$DRAGON swaps
-- **RedDragonJackpotVault**: Collects and distributes jackpot funds
+- **ve8020 Token System**: Allows users to lock RedDragon tokens to gain voting power and earn rewards
+- **Fee Distribution**: Automatically distributes rewards to ve8020 holders proportional to their voting power
+- **Weekly Epochs**: Rewards are distributed on a weekly basis (epochs)
 
-## Features
+## Fee Distribution
 
-1. **Automatic Reward Distribution**: Weekly distribution of rewards to ve8020 holders
-2. **Optimized Gas Usage**: Streamlined contract implementations
-3. **Standardized VRF Implementation**: Secure, verifiable randomness
-4. **Balancer Integration**: 80/20 weighted pools for optimal liquidity
-5. **Lottery System**: Chance-based jackpot for traders
+The system now allocates 100% of fees to ve8020 token holders. This ensures maximum rewards for governance participants.
 
-## Documentation
+## Development
 
-- [VRF Implementation Guide](VRF_IMPLEMENTATION_GUIDE.md)
-- [Balancer Migration](BALANCER_MIGRATION.md)
+### Prerequisites
 
-## Security
+- Node.js v14+
+- npm or yarn
 
-The contracts have been refactored to:
-- Remove unnecessary interfaces
-- Implement direct functionality where possible
-- Optimize gas usage
-- Add batch processing for large operations
-- Improve error handling
+### Installation
+
+```bash
+npm install
+```
+
+### Testing
+
+```bash
+npx hardhat test
+```
+
+### Deployment
+
+```bash
+npx hardhat run scripts/deploy.js
+```
 
 ## License
 
