@@ -1,10 +1,10 @@
 # RedDragon Token Ecosystem
 
-This repository contains the smart contracts for the RedDragon token ecosystem, including the ve8020 token and fee distribution system.
+This is the official repository for the RedDragon token ecosystem, featuring the ve8020 voting escrow system and optimized fee distribution.
 
-## Overview
+## Core Components
 
-The RedDragon ecosystem consists of the following core contracts:
+The RedDragon ecosystem consists of the following main contracts:
 
 - `RedDragon.sol`: The main ERC20 token
 - `ve8020.sol`: The voting escrow token for governance and rewards
@@ -12,13 +12,20 @@ The RedDragon ecosystem consists of the following core contracts:
 
 ## Key Features
 
-- **ve8020 Token System**: Allows users to lock RedDragon tokens to gain voting power and earn rewards
-- **Fee Distribution**: Automatically distributes rewards to ve8020 holders proportional to their voting power
-- **Weekly Epochs**: Rewards are distributed on a weekly basis (epochs)
+- **ve8020 Token System**: Lock RedDragon tokens to gain voting power and earn rewards
+- **Simplified Fee Distribution**: 100% of fees go directly to ve8020 holders
+- **Weekly Epochs**: Automatic distribution of rewards on a weekly basis
+- **Optimized for Gas**: Streamlined contracts with minimal overhead
+- **Governance Ready**: Voting power proportional to lock duration and amount
 
-## Fee Distribution
+## Recent Updates
 
-The system now allocates 100% of fees to ve8020 token holders. This ensures maximum rewards for governance participants.
+We've significantly optimized the codebase by:
+
+1. **Removing Budget Management**: All fees now go directly to ve8020 holders
+2. **Removing Unused Vaults**: Simplified architecture with no development vault
+3. **Eliminating Deprecated Code**: Completely removed deprecated interfaces and contracts
+4. **Streamlining Core Contracts**: Focused on essential functionality only
 
 ## Development
 
