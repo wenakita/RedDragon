@@ -445,7 +445,7 @@ abstract contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IV
      * @param baseProbability Base probability before boosts
      * @return probability The effective probability after all boosts
      */
-    function applyBoosts(address user, uint256 baseProbability) internal view returns (uint256) {
+    function applyBoosts(address user, uint256 baseProbability) internal virtual view returns (uint256) {
         uint256 finalProbability = baseProbability;
         
         // Apply LP boost if booster is set
@@ -811,7 +811,7 @@ abstract contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IV
      * @param winner Address of the winner
      * @param amount Amount to distribute
      */
-    function distributeJackpot(address winner, uint256 amount) external {
+    function distributeJackpot(address winner, uint256 amount) external virtual {
         // Only allow calls from this contract or the owner
         require(msg.sender == address(this) || msg.sender == owner(), "Not authorized");
         
