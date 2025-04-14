@@ -8,26 +8,11 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./ve8020.sol";
 
-// Interface for ShadowDEX Router
-interface IRouter {
-    function factory() external pure returns (address);
-    function WETH() external pure returns (address);
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity);
-}
-
 /**
  * @title Ve8020FeeDistributor
- * @dev Combined contract that distributes transaction fees to ve(80/20) holders
- * proportional to their voting power, manages liquidity, and handles development budgets.
+ * @dev Contract that distributes transaction fees to ve(80/20) holders
+ * proportional to their voting power.
+ * Distributions happen automatically at the end of each weekly epoch.
  */
 contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -35,8 +20,6 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     // Core state variables
     ve8020 public veToken;
     IERC20 public rewardToken; // DRAGON token
-    IERC20 public wrappedSonic; // wS token
-    IRouter public router;
     
     // Mapping of user => epoch => claimed status
     mapping(address => mapping(uint256 => bool)) public userEpochClaimed;
@@ -57,55 +40,19 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     uint256 public epochStartTime;
     
     // Fee allocation percentages (basis points, 100% = 10000)
-    uint256 public rewardAllocation = 7000; // 70% to ve8020 holders
-    uint256 public liquidityAllocation = 1850; // 18.5% to liquidity
-    uint256 public developmentAllocation = 1150; // 11.5% to development
+    uint256 public rewardAllocation = 10000; // 100% to ve8020 holders
     
-    // Liquidity configuration
-    uint256 public minTokensToLiquidity = 1000 * 10**18; // 1000 tokens min before adding liquidity
-    uint256 public autoLiquidityFrequency = 1 days; // Frequency of automated liquidity additions
-    uint256 public lastLiquidityAddition;
-    
-    // Liquidity statistics
-    uint256 public totalLiquidityAdded;
-    uint256 public totalRedDragonLiquidity;
-    uint256 public totalWrappedSonicLiquidity;
-    
-    // Development budget tracking
-    struct Budget {
-        string purpose;
-        uint256 amount;
-        uint256 used;
-        uint256 createdAt;
-        bool active;
-    }
-    
-    Budget[] public budgets;
-    mapping(uint256 => address) public budgetOwners;
-    
-    // Development statistics
-    uint256 public totalDevReceived;
-    uint256 public totalDevSpent;
-    uint256 public lastSpendTime;
+    // Automatic distribution data
+    mapping(address => mapping(uint256 => uint256)) public userEpochRewards;
+    mapping(uint256 => address[]) public epochParticipants;
     
     // Events - Distribution Events
     event RewardsAdded(uint256 indexed epoch, uint256 amount);
     event RewardsClaimed(address indexed user, uint256 indexed epoch, uint256 amount);
+    event RewardsAutomaticallyDistributed(uint256 indexed epoch, uint256 totalAmount, uint256 recipientCount);
     event EpochAdvanced(uint256 indexed epoch, uint256 totalVotingPower);
-    event FeesReceived(uint256 totalAmount, uint256 rewardsAmount, uint256 liquidityAmount, uint256 developmentAmount);
-    event AllocationUpdated(uint256 rewardAllocation, uint256 liquidityAllocation, uint256 developmentAllocation);
-    
-    // Events - Liquidity Events
-    event LiquidityAdded(uint256 redDragonAmount, uint256 wrappedSonicAmount, uint256 liquidityTokens);
-    event RouterUpdated(address indexed newRouter);
-    event MinTokensToLiquidityUpdated(uint256 newAmount);
-    event AutoLiquidityFrequencyUpdated(uint256 newFrequency);
-    
-    // Events - Development Events
-    event TokenSpent(address indexed to, uint256 amount, string purpose, uint256 budgetId);
-    event BudgetCreated(uint256 indexed budgetId, string purpose, uint256 amount, address owner);
-    event BudgetUpdated(uint256 indexed budgetId, uint256 newAmount, bool active);
-    event BudgetSpent(uint256 indexed budgetId, address indexed to, uint256 amount);
+    event FeesReceived(uint256 totalAmount);
+    event AllocationUpdated(uint256 rewardAllocation);
     
     // Events - Shared Events
     event EmergencyWithdrawal(address indexed to, uint256 amount, address token);
@@ -114,24 +61,16 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
      * @dev Constructor
      * @param _veToken Address of the ve8020 token
      * @param _rewardToken Address of the reward token (DRAGON)
-     * @param _wrappedSonic Address of the wS token
-     * @param _router Address of the router for liquidity addition
      */
     constructor(
         address _veToken, 
-        address _rewardToken, 
-        address _wrappedSonic,
-        address _router
+        address _rewardToken
     ) {
         require(_veToken != address(0), "ve8020 address cannot be zero");
         require(_rewardToken != address(0), "Reward token address cannot be zero");
-        require(_wrappedSonic != address(0), "wS address cannot be zero");
-        require(_router != address(0), "Router address cannot be zero");
         
         veToken = ve8020(_veToken);
         rewardToken = IERC20(_rewardToken);
-        wrappedSonic = IERC20(_wrappedSonic);
-        router = IRouter(_router);
         
         // Initialize first epoch
         epochStartTime = block.timestamp;
@@ -142,51 +81,17 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Sets the allocation percentages for fees
+     * @dev Sets the allocation percentage for fees (kept for backward compatibility)
      * @param _rewardAllocation Percentage for ve8020 rewards (basis points)
-     * @param _liquidityAllocation Percentage for liquidity (basis points)
-     * @param _developmentAllocation Percentage for development (basis points)
      */
     function setFeeAllocation(
-        uint256 _rewardAllocation,
-        uint256 _liquidityAllocation,
-        uint256 _developmentAllocation
+        uint256 _rewardAllocation
     ) external onlyOwner {
-        require(_rewardAllocation + _liquidityAllocation + _developmentAllocation == 10000, "Must total 10000 basis points");
+        require(_rewardAllocation == 10000, "Must be 10000 basis points (100%)");
         
         rewardAllocation = _rewardAllocation;
-        liquidityAllocation = _liquidityAllocation;
-        developmentAllocation = _developmentAllocation;
         
-        emit AllocationUpdated(rewardAllocation, liquidityAllocation, developmentAllocation);
-    }
-    
-    /**
-     * @dev Sets the router address for liquidity
-     * @param _router Address of the new router
-     */
-    function setRouter(address _router) external onlyOwner {
-        require(_router != address(0), "Router address cannot be zero");
-        router = IRouter(_router);
-        emit RouterUpdated(_router);
-    }
-    
-    /**
-     * @dev Sets the minimum amount of tokens required to add liquidity
-     * @param _minTokensToLiquidity Minimum amount of tokens
-     */
-    function setMinTokensToLiquidity(uint256 _minTokensToLiquidity) external onlyOwner {
-        minTokensToLiquidity = _minTokensToLiquidity;
-        emit MinTokensToLiquidityUpdated(_minTokensToLiquidity);
-    }
-    
-    /**
-     * @dev Sets the frequency for automatic liquidity additions
-     * @param _frequency Frequency in seconds
-     */
-    function setAutoLiquidityFrequency(uint256 _frequency) external onlyOwner {
-        autoLiquidityFrequency = _frequency;
-        emit AutoLiquidityFrequencyUpdated(_frequency);
+        emit AllocationUpdated(rewardAllocation);
     }
     
     /**
@@ -202,29 +107,11 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         // Transfer reward tokens from caller to this contract
         rewardToken.safeTransferFrom(msg.sender, address(this), _amount);
         
-        // Split fees according to allocation
-        uint256 rewardsAmount = (_amount * rewardAllocation) / 10000;
-        uint256 liquidityAmount = (_amount * liquidityAllocation) / 10000;
-        uint256 developmentAmount = _amount - rewardsAmount - liquidityAmount;
+        // All rewards go to current epoch
+        epochRewards[currentEpoch] += _amount;
+        emit RewardsAdded(currentEpoch, _amount);
         
-        // Add rewards to current epoch
-        if (rewardsAmount > 0) {
-            epochRewards[currentEpoch] += rewardsAmount;
-            emit RewardsAdded(currentEpoch, rewardsAmount);
-        }
-        
-        // Track development allocation
-        if (developmentAmount > 0) {
-            totalDevReceived += developmentAmount;
-        }
-        
-        // Add liquidity if threshold met
-        if (liquidityAmount >= minTokensToLiquidity && 
-            (block.timestamp >= lastLiquidityAddition + autoLiquidityFrequency)) {
-            _addLiquidity(liquidityAmount);
-        }
-        
-        emit FeesReceived(_amount, rewardsAmount, liquidityAmount, developmentAmount);
+        emit FeesReceived(_amount);
     }
     
     /**
@@ -237,71 +124,11 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         // Check if epoch needs to be advanced
         checkAdvanceEpoch();
         
-        // Split fees according to allocation
-        uint256 rewardsAmount = (_amount * rewardAllocation) / 10000;
-        uint256 liquidityAmount = (_amount * liquidityAllocation) / 10000;
-        uint256 developmentAmount = _amount - rewardsAmount - liquidityAmount;
+        // All rewards go to current epoch
+        epochRewards[currentEpoch] += _amount;
+        emit RewardsAdded(currentEpoch, _amount);
         
-        // Add rewards to current epoch
-        if (rewardsAmount > 0) {
-            epochRewards[currentEpoch] += rewardsAmount;
-            emit RewardsAdded(currentEpoch, rewardsAmount);
-        }
-        
-        // Track development allocation
-        if (developmentAmount > 0) {
-            totalDevReceived += developmentAmount;
-        }
-        
-        // Add liquidity if threshold met
-        if (liquidityAmount >= minTokensToLiquidity && 
-            (block.timestamp >= lastLiquidityAddition + autoLiquidityFrequency)) {
-            _addLiquidity(liquidityAmount);
-        }
-        
-        emit FeesReceived(_amount, rewardsAmount, liquidityAmount, developmentAmount);
-    }
-    
-    /**
-     * @dev Implementation of liquidity addition
-     * Adds liquidity to the DEX using allocated tokens
-     * @param tokenAmount Amount of DRAGON tokens to use for liquidity
-     */
-    function _addLiquidity(uint256 tokenAmount) internal {
-        require(tokenAmount > 0, "No tokens to add liquidity");
-        
-        // Calculate how much wS to use - typical implementation would get the fair value
-        // For simplicity, we'll use an equal value approach
-        uint256 wrappedSonicBalance = wrappedSonic.balanceOf(address(this));
-        require(wrappedSonicBalance > 0, "No wS tokens to add liquidity");
-        
-        // Approve tokens for router
-        rewardToken.safeApprove(address(router), tokenAmount);
-        wrappedSonic.safeApprove(address(router), wrappedSonicBalance);
-        
-        // Add liquidity to DEX pair
-        (uint256 redDragonAdded, uint256 wrappedSonicAdded, uint256 liquidityTokens) = router.addLiquidity(
-            address(rewardToken),
-            address(wrappedSonic),
-            tokenAmount,
-            wrappedSonicBalance,
-            0, // Accept any amount of RedDragon
-            0, // Accept any amount of wS
-            owner(), // Send LP tokens to owner (multisig)
-            block.timestamp + 600 // 10 minute deadline
-        );
-        
-        // Update statistics
-        totalLiquidityAdded += liquidityTokens;
-        totalRedDragonLiquidity += redDragonAdded;
-        totalWrappedSonicLiquidity += wrappedSonicAdded;
-        lastLiquidityAddition = block.timestamp;
-        
-        emit LiquidityAdded(redDragonAdded, wrappedSonicAdded, liquidityTokens);
-        
-        // Clear any remaining approval
-        rewardToken.safeApprove(address(router), 0);
-        wrappedSonic.safeApprove(address(router), 0);
+        emit FeesReceived(_amount);
     }
     
     /**
@@ -310,6 +137,9 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     function checkAdvanceEpoch() public {
         // If epoch duration has passed, advance to next epoch
         while (block.timestamp >= epochStartTime + EPOCH_DURATION) {
+            // Process automatic distribution for the completed epoch
+            _processAutomaticDistribution(currentEpoch);
+            
             // Advance to next epoch
             currentEpoch += 1;
             epochStartTime += EPOCH_DURATION;
@@ -322,32 +152,97 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Claim rewards for a specific epoch
-     * @param _epoch Epoch to claim rewards for
+     * @dev Process automatic distribution for a completed epoch
+     * @param _epoch The epoch to process
      */
-    function claimEpochRewards(uint256 _epoch) external nonReentrant {
-        // Ensure epoch is valid
-        require(_epoch < currentEpoch, "Epoch not finalized yet");
-        require(!userEpochClaimed[msg.sender][_epoch], "Rewards already claimed for this epoch");
+    function _processAutomaticDistribution(uint256 _epoch) internal {
+        uint256 totalRewards = epochRewards[_epoch];
+        if (totalRewards == 0) return; // No rewards to distribute
         
-        // Calculate user's voting power at the epoch
-        uint256 userVotingPower = getUserVotingPowerAt(msg.sender, _epoch);
-        require(userVotingPower > 0, "No voting power in this epoch");
-        
-        // Calculate user's share of rewards
         uint256 totalVotingPower = epochTotalVotingPower[_epoch];
-        uint256 epochRewardAmount = epochRewards[_epoch];
+        if (totalVotingPower == 0) return; // No one to distribute to
         
-        uint256 userReward = (epochRewardAmount * userVotingPower) / totalVotingPower;
-        require(userReward > 0, "No rewards to claim");
+        uint256 distributedAmount = 0;
+        uint256 recipientCount = 0;
         
-        // Mark as claimed
-        userEpochClaimed[msg.sender][_epoch] = true;
+        // More efficient holder processing
+        uint256 holderCount = veToken.balanceOfHolderCount();
+        uint256 maxBatchSize = 100; // Process in smaller batches to avoid gas limits
         
-        // Send rewards to user
-        require(rewardToken.transfer(msg.sender, userReward), "Reward transfer failed");
+        for (uint256 i = 0; i < holderCount && i < maxBatchSize; i++) {
+            address holder = veToken.holderAt(i);
+            uint256 votingPower = veToken.balanceOf(holder);
+            
+            if (votingPower == 0) continue;
+            
+            uint256 reward = (totalRewards * votingPower) / totalVotingPower;
+            if (reward == 0) continue;
+            
+            // Update the distributed rewards and mark as claimed
+            userEpochClaimed[holder][_epoch] = true;
+            userEpochRewards[holder][_epoch] = reward;
+            epochParticipants[_epoch].push(holder);
+            
+            // Transfer rewards directly to the holder
+            rewardToken.safeTransfer(holder, reward);
+            
+            distributedAmount += reward;
+            recipientCount++;
+            
+            emit RewardsClaimed(holder, _epoch, reward);
+        }
         
-        emit RewardsClaimed(msg.sender, _epoch, userReward);
+        // Handle any remaining undistributed rewards
+        if (distributedAmount < totalRewards) {
+            uint256 remaining = totalRewards - distributedAmount;
+            // Add remaining to next epoch rather than losing them
+            epochRewards[_epoch + 1] += remaining;
+            emit RewardsAdded(_epoch + 1, remaining);
+        }
+        
+        emit RewardsAutomaticallyDistributed(_epoch, distributedAmount, recipientCount);
+    }
+    
+    /**
+     * @dev Get array of active ve8020 holders
+     * @return Active holders array
+     * @dev This function is no longer used due to gas optimization
+     */
+    function _getActiveHolders() internal view returns (address[] memory) {
+        uint256 holderCount = veToken.balanceOfHolderCount();
+        
+        // Count active holders first to avoid creating oversized arrays
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < holderCount; i++) {
+            address holder = veToken.holderAt(i);
+            if (veToken.balanceOf(holder) > 0) {
+                activeCount++;
+            }
+        }
+        
+        // Create properly sized array
+        address[] memory activeHolders = new address[](activeCount);
+        
+        // Fill array with active holders
+        uint256 index = 0;
+        for (uint256 i = 0; i < holderCount && index < activeCount; i++) {
+            address holder = veToken.holderAt(i);
+            if (veToken.balanceOf(holder) > 0) {
+                activeHolders[index] = holder;
+                index++;
+            }
+        }
+        
+        return activeHolders;
+    }
+    
+    /**
+     * @dev Manually trigger the reward distribution process
+     * @param _epoch Epoch to process
+     */
+    function triggerDistribution(uint256 _epoch) external onlyOwner {
+        require(_epoch < currentEpoch, "Epoch not finalized yet");
+        _processAutomaticDistribution(_epoch);
     }
     
     /**
@@ -362,142 +257,28 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         return veToken.balanceOf(_user);
     }
     
-    // DEVELOPMENT FUNCTIONALITY
-    
     /**
-     * @dev Creates a new budget allocation
-     * @param purpose Description of the budget purpose
-     * @param amount Amount allocated for this budget
-     * @param budgetOwner Address allowed to spend from this budget
+     * @dev Get information about rewards for a user in a specific epoch
+     * @param _user User address
+     * @param _epoch Epoch number
+     * @return claimed Whether rewards were claimed
+     * @return rewardAmount Amount of rewards received
      */
-    function createBudget(string memory purpose, uint256 amount, address budgetOwner) external onlyOwner returns (uint256) {
-        require(amount > 0, "Budget amount must be greater than zero");
-        require(budgetOwner != address(0), "Budget owner cannot be zero address");
-        
-        uint256 budgetId = budgets.length;
-        budgets.push(Budget({
-            purpose: purpose,
-            amount: amount,
-            used: 0,
-            createdAt: block.timestamp,
-            active: true
-        }));
-        
-        budgetOwners[budgetId] = budgetOwner;
-        
-        emit BudgetCreated(budgetId, purpose, amount, budgetOwner);
-        return budgetId;
-    }
-    
-    /**
-     * @dev Updates an existing budget
-     * @param budgetId ID of the budget to update
-     * @param newAmount New amount for the budget
-     * @param active Whether the budget is active
-     */
-    function updateBudget(uint256 budgetId, uint256 newAmount, bool active) external onlyOwner {
-        require(budgetId < budgets.length, "Budget does not exist");
-        
-        Budget storage budget = budgets[budgetId];
-        budget.amount = newAmount;
-        budget.active = active;
-        
-        emit BudgetUpdated(budgetId, newAmount, active);
-    }
-    
-    /**
-     * @dev Changes the owner of a budget
-     * @param budgetId ID of the budget
-     * @param newOwner New owner address
-     */
-    function changeBudgetOwner(uint256 budgetId, address newOwner) external onlyOwner {
-        require(budgetId < budgets.length, "Budget does not exist");
-        require(newOwner != address(0), "New owner cannot be zero address");
-        
-        budgetOwners[budgetId] = newOwner;
-    }
-    
-    /**
-     * @dev Allows a budget owner to spend from their budget
-     * @param budgetId ID of the budget to spend from
-     * @param to Address to send tokens to
-     * @param amount Amount to spend
-     */
-    function spendFromBudget(uint256 budgetId, address to, uint256 amount) external {
-        require(budgetId < budgets.length, "Budget does not exist");
-        require(msg.sender == budgetOwners[budgetId] || msg.sender == owner(), "Not authorized");
-        require(to != address(0), "Cannot send to zero address");
-        
-        Budget storage budget = budgets[budgetId];
-        require(budget.active, "Budget is not active");
-        require(amount > 0, "Amount must be greater than zero");
-        require(budget.used + amount <= budget.amount, "Exceeds budget");
-        
-        // Calculate available development funds
-        uint256 devAvailable = totalDevReceived - totalDevSpent;
-        require(devAvailable >= amount, "Insufficient development funds");
-        
-        // Update budget and stats
-        budget.used += amount;
-        totalDevSpent += amount;
-        lastSpendTime = block.timestamp;
-        
-        // Transfer tokens
-        rewardToken.safeTransfer(to, amount);
-        
-        emit BudgetSpent(budgetId, to, amount);
-        emit TokenSpent(to, amount, budget.purpose, budgetId);
-    }
-    
-    /**
-     * @dev Gets the number of budgets
-     * @return The number of budgets
-     */
-    function getBudgetCount() external view returns (uint256) {
-        return budgets.length;
-    }
-    
-    /**
-     * @dev Gets details about a budget
-     * @param budgetId ID of the budget
-     * @return Purpose of the budget
-     * @return Total amount allocated
-     * @return Amount used
-     * @return Creation timestamp
-     * @return Whether the budget is active
-     * @return Owner of the budget
-     */
-    function getBudgetDetails(uint256 budgetId) external view returns (
-        string memory, uint256, uint256, uint256, bool, address
+    function getUserEpochRewardInfo(address _user, uint256 _epoch) external view returns (
+        bool claimed,
+        uint256 rewardAmount
     ) {
-        require(budgetId < budgets.length, "Budget does not exist");
-        
-        Budget storage budget = budgets[budgetId];
-        return (
-            budget.purpose,
-            budget.amount,
-            budget.used,
-            budget.createdAt,
-            budget.active,
-            budgetOwners[budgetId]
-        );
+        claimed = userEpochClaimed[_user][_epoch];
+        rewardAmount = userEpochRewards[_user][_epoch];
     }
     
     /**
-     * @dev Manually trigger liquidity addition
-     * Only callable by owner
+     * @dev Get participants for a specific epoch
+     * @param _epoch Epoch number
+     * @return Array of participant addresses
      */
-    function triggerLiquidityAddition(uint256 amount) external onlyOwner {
-        require(amount > 0, "Amount must be greater than zero");
-        _addLiquidity(amount);
-    }
-    
-    /**
-     * @dev Get available development funds
-     * @return Amount of available development funds
-     */
-    function getAvailableDevelopmentFunds() external view returns (uint256) {
-        return totalDevReceived - totalDevSpent;
+    function getEpochParticipants(uint256 _epoch) external view returns (address[] memory) {
+        return epochParticipants[_epoch];
     }
     
     /**
@@ -535,5 +316,65 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         }
         
         return (currentEpoch, epochStartTime, timeUntilNext);
+    }
+    
+    /**
+     * @dev Manually trigger the reward distribution process for a specific batch of holders
+     * @param _epoch Epoch to process
+     * @param _startIndex Start index for holder processing
+     * @param _endIndex End index for holder processing (exclusive)
+     */
+    function triggerDistributionBatch(uint256 _epoch, uint256 _startIndex, uint256 _endIndex) external onlyOwner {
+        require(_epoch < currentEpoch, "Epoch not finalized yet");
+        require(_startIndex < _endIndex, "Invalid index range");
+        
+        uint256 totalRewards = epochRewards[_epoch];
+        if (totalRewards == 0) return; // No rewards to distribute
+        
+        uint256 totalVotingPower = epochTotalVotingPower[_epoch];
+        if (totalVotingPower == 0) return; // No one to distribute to
+        
+        uint256 holderCount = veToken.balanceOfHolderCount();
+        require(_endIndex <= holderCount, "End index out of bounds");
+        
+        uint256 distributedAmount = 0;
+        uint256 recipientCount = 0;
+        
+        for (uint256 i = _startIndex; i < _endIndex; i++) {
+            address holder = veToken.holderAt(i);
+            if (userEpochClaimed[holder][_epoch]) continue; // Skip if already claimed
+            
+            uint256 votingPower = veToken.balanceOf(holder);
+            if (votingPower == 0) continue;
+            
+            uint256 reward = (totalRewards * votingPower) / totalVotingPower;
+            if (reward == 0) continue;
+            
+            // Update the distributed rewards and mark as claimed
+            userEpochClaimed[holder][_epoch] = true;
+            userEpochRewards[holder][_epoch] = reward;
+            epochParticipants[_epoch].push(holder);
+            
+            // Transfer rewards directly to the holder
+            rewardToken.safeTransfer(holder, reward);
+            
+            distributedAmount += reward;
+            recipientCount++;
+            
+            emit RewardsClaimed(holder, _epoch, reward);
+        }
+        
+        emit RewardsAutomaticallyDistributed(_epoch, distributedAmount, recipientCount);
+    }
+    
+    /**
+     * @dev Clear epoch participant data to save storage
+     * @param _epoch Epoch to clear data for
+     * @notice This can be called after a certain period to free up storage
+     */
+    function clearEpochParticipants(uint256 _epoch) external onlyOwner {
+        require(_epoch < currentEpoch - 4, "Cannot clear recent epochs"); // Keep at least 4 epochs of history
+        
+        delete epochParticipants[_epoch];
     }
 } 

@@ -5,14 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./RedDragonSwapLottery.sol";
-
-/**
- * @dev Interface for PaintSwap's VRF
- */
-interface IPaintSwapVRF {
-    function requestRandomness() external returns (bytes32);
-    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external;
-}
+import "./interfaces/IPaintSwapVRF.sol";
 
 /**
  * @title RedDragonThankYouToken

@@ -6,14 +6,18 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "./interfaces/IVRFCoordinator.sol";
+import "./interfaces/IVRFConsumer.sol";
 
 /**
  * @title RedDragonPaintSwapVerifier
  * @dev Verifies PaintSwap VRF randomness proofs for the RedDragonPaintSwap contract
  * @notice This contract implements verification logic for PaintSwap VRF randomness
  */
-contract RedDragonPaintSwapVerifier is Ownable {
+contract RedDragonPaintSwapVerifier is Ownable, Pausable, ReentrancyGuard, IVRFConsumer {
     // Circuit breaker
     bool public isPaused;
     
@@ -223,5 +227,27 @@ contract RedDragonPaintSwapVerifier is Ownable {
     function setPaused(bool _isPaused) external onlyOwner {
         isPaused = _isPaused;
         emit PauseStateChanged(_isPaused);
+    }
+
+    /**
+     * @dev Check if VRF is enabled for this contract
+     * @return True if VRF is enabled
+     */
+    function isVrfEnabled() external view override returns (bool) {
+        return vrfCoordinator != address(0);
+    }
+
+    /**
+     * @dev Get the VRF configuration
+     * @return vrfCoordinator Address of the VRF coordinator
+     * @return hash VRF key hash
+     * @return subId VRF subscription ID
+     */
+    function getVRFConfiguration() external view override returns (
+        address vrfCoordinator,
+        bytes32 hash,
+        uint64 subId
+    ) {
+        return (vrfCoordinator, gasLane, subscriptionId);
     }
 } 
