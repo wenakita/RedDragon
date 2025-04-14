@@ -113,9 +113,18 @@ async function main() {
   // Add rewards to the fee distributor
   console.log("\n💧 Adding wS rewards to fee distributor...");
   const rewardAmount = ethers.utils.parseEther("1000");
-  await wrappedSonic.approve(feeDistributor.address, rewardAmount);
-  await feeDistributor.addRewards(rewardAmount);
-  console.log(`- Added ${ethers.utils.formatEther(rewardAmount)} wS tokens as rewards`);
+  
+  // Transfer wS tokens to the fee distributor first
+  await wrappedSonic.transfer(feeDistributor.address, rewardAmount);
+  console.log(`- Transferred ${ethers.utils.formatEther(rewardAmount)} wS tokens to fee distributor`);
+  
+  // Then call receiveRewards instead of addRewards
+  await feeDistributor.receiveRewards(rewardAmount);
+  console.log(`- Called receiveRewards with ${ethers.utils.formatEther(rewardAmount)} wS tokens`);
+  
+  // Check the wS balance of the distributor to confirm
+  const distributorBalance = await wrappedSonic.balanceOf(feeDistributor.address);
+  console.log(`- Fee distributor wS balance: ${ethers.utils.formatEther(distributorBalance)}`)
   
   // Get current epoch info
   const epochInfo = await feeDistributor.getCurrentEpochInfo();

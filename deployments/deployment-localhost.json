@@ -1,0 +1,10 @@
+{
+  "network": "localhost",
+  "timestamp": "2025-04-14T12:55:08.681Z",
+  "contracts": {
+    "RedDragon": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "wrappedSonic": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    "ve8020": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    "Ve8020FeeDistributor": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
+  }
+}
