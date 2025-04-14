@@ -27,7 +27,7 @@ describe("RedEnvelope", function () {
       expect(await redEnvelope.symbol()).to.equal("RDENV");
       
       // Mint a token to test URI
-      await redEnvelope.mint(user1.address, 1, false);
+      await redEnvelope.mint(user1.address, 1);
       expect(await redEnvelope.tokenURI(1)).to.equal("https://api.reddragon.xyz/redenvelope/1");
     });
   });
@@ -35,7 +35,7 @@ describe("RedEnvelope", function () {
   describe("Minting", function() {
     it("should allow owner to mint envelopes", async function() {
       // Mint a common envelope (rarity 1)
-      await redEnvelope.mint(user1.address, 1, false);
+      await redEnvelope.mint(user1.address, 1);
       
       // Check token ownership
       expect(await redEnvelope.ownerOf(1)).to.equal(user1.address);
@@ -50,17 +50,17 @@ describe("RedEnvelope", function () {
 
     it("should not allow non-owner to mint", async function() {
       await expect(
-        redEnvelope.connect(user1).mint(user2.address, 1, false)
+        redEnvelope.connect(user1).mint(user2.address, 1)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
 
     it("should not allow minting with invalid rarity", async function() {
       await expect(
-        redEnvelope.mint(user1.address, 0, false)
+        redEnvelope.mint(user1.address, 0)
       ).to.be.revertedWith("Invalid rarity");
       
       await expect(
-        redEnvelope.mint(user1.address, 6, false)
+        redEnvelope.mint(user1.address, 6)
       ).to.be.revertedWith("Invalid rarity");
     });
   });
@@ -82,34 +82,26 @@ describe("RedEnvelope", function () {
   describe("Boost Calculation", function() {
     beforeEach(async function() {
       // Mint envelopes to test with
-      await redEnvelope.mint(user1.address, 1, false); // Common
-      await redEnvelope.mint(user2.address, 3, true);  // Rare + early adopter
+      await redEnvelope.mint(user1.address, 1); // Common
+      await redEnvelope.mintWithEarlyAdopter(user2.address, 3, true);  // Rare + early adopter
       await redEnvelope.recordContribution(user2.address, 1000);
     });
 
     it("should correctly check red envelope ownership", async function() {
-      expect(await redEnvelope.hasRedEnvelope(user1.address)).to.equal(true);
-      expect(await redEnvelope.hasRedEnvelope(user2.address)).to.equal(true);
-      expect(await redEnvelope.hasRedEnvelope(user3.address)).to.equal(false);
+      expect(await redEnvelope.hasRedEnvelope(user1.address)).to.be.true;
+      expect(await redEnvelope.hasRedEnvelope(user3.address)).to.be.false;
     });
 
     it("should calculate boost based on rarity", async function() {
-      // Common envelope (rarity 1) should give 0.2% boost
-      const boost1 = await redEnvelope.calculateBoost(user1.address);
-      expect(boost1.toNumber()).to.equal(20); // 0.2% = 20 in BOOST_PRECISION
-      
-      // Rare envelope (rarity 3) with early adopter should give:
-      // - 0.6% base boost (3 * 0.2%)
-      // - 1% early adopter boost
-      // - Plus contribution boost (0% since no contributions)
-      // Total: 1.6% = 160 in BOOST_PRECISION
-      const boost2 = await redEnvelope.calculateBoost(user2.address);
-      expect(boost2.toNumber()).to.equal(160);
+      // Common envelope (rarity 1) should give 1.25x boost (100 + 25 = 125)
+      expect(await redEnvelope.calculateBoost(user1.address)).to.equal(125);
+
+      // Rare envelope (rarity 3) should give 1.75x boost (100 + 3*25 = 175) + 50 for early adopter = 225
+      expect(await redEnvelope.calculateBoost(user2.address)).to.equal(225);
     });
 
-    it("should return zero boost for non-holders", async function() {
-      const boost = await redEnvelope.calculateBoost(user3.address);
-      expect(boost.toNumber()).to.equal(0);
+    it("should return base boost for non-holders", async function() {
+      expect(await redEnvelope.calculateBoost(user3.address)).to.equal(100);
     });
   });
 
@@ -148,7 +140,7 @@ describe("RedEnvelope", function () {
       await redEnvelope.setBaseTokenURI(newURI);
       
       // Mint a token to test URI
-      await redEnvelope.mint(user1.address, 1, false);
+      await redEnvelope.mint(user1.address, 1);
       expect(await redEnvelope.tokenURI(1)).to.equal(newURI + "1");
     });
 

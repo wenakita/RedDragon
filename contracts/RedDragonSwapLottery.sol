@@ -10,14 +10,9 @@ import "./interfaces/IRedDragonPaintSwapVerifier.sol";
 import "./interfaces/IRedDragonLPBooster.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IVRFConsumer.sol";
-
-/**
- * @dev Interface for the red envelope that grants special boosts
- */
-interface IRedEnvelope {
-    function hasRedEnvelope(address user) external view returns (bool);
-    function calculateBoost(address user) external view returns (uint256);
-}
+import "./interfaces/IVRFCoordinator.sol";
+import "./interfaces/IRedEnvelope.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /**
  * @title RedDragonSwapLottery
@@ -30,7 +25,7 @@ interface IRedEnvelope {
  * - Higher boost cap allows for rare but significant jackpots to accumulate
  * - Users' probability is boosted based on their LP token holdings using Curve's boost formula
  */
-contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsumer {
+abstract contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsumer {
     using SafeERC20 for IERC20;
 
     // Circuit breaker
@@ -44,14 +39,14 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     uint256 private constant BASE_WS_AMOUNT = 1 ether; // 1 wS tokens as base
 
     // Probability settings
-    uint256 private constant BASE_PROBABILITY = 4000; // 0.4% (using PROBABILITY_DENOMINATOR of 10000000)
+    uint256 private constant BASE_PROBABILITY = 10; // 0.1% per 1 wS
     uint256 private constant PROBABILITY_DENOMINATOR = 10000000; // For 0.0001% precision
     uint256 private constant MAX_PROBABILITY = 40000; // 4% (base max without boosts)
     
     // Constants for pity timer - ULTRA CONSERVATIVE SETTINGS
     uint256 private constant PITY_PERCENT_OF_SWAP = 1; // Increase by 0.0001% of swap amount (now using divisor 10000000)
     uint256 private constant PITY_DIVISOR = 10000000; // Divisor for pity calculation (was 10000)
-    uint256 private constant MAX_PITY_BOOST = 10000; // Maximum 10000% boost (100x)
+    uint256 public constant MAX_PITY_BOOST = 50; // 50% maximum pity boost
     
     // Constants for Curve's boost formula
     uint256 private constant BOOST_BASE = 40; // 40% base boost
@@ -60,8 +55,8 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     uint256 private constant MAX_BOOST_MULTIPLIER = 250; // Maximum 2.5x boost
     
     // Entry amount settings
-    uint256 private constant MIN_WS_ENTRY = 1 ether; // 1 wS
-    uint256 private constant MAX_WS_ENTRY = 10000 ether; // 10,000 wS
+    uint256 private constant MIN_ENTRY_AMOUNT = 1e18; // 1 wS minimum
+    uint256 private constant MAX_ENTRY_AMOUNT = 10000 ether; // 10,000 wS
     uint256 private constant MIN_USD_ENTRY = 1_000000; // $1 USD (6 decimals)
     uint256 private constant MAX_USD_ENTRY = 10000_000000; // $10,000 USD (6 decimals)
     bool public useUsdEntryAmounts = false; // Default to wS-based entry
@@ -83,8 +78,16 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     uint256 public accumulatedWSBoost; // Cumulative wS boosts from losses
     uint256 public lastWinTimestamp;
     
+    // Pity boost tracking
+    mapping(address => uint256) public pityBoost;
+    mapping(address => uint256) public lastBuyAmount;
+    
+    // VRF coordinator
+    IVRFCoordinator public vrfCoordinator;
+    
     // Voting power tracking for boost calculation
     address public votingToken; // Token used for vote weight (ve token)
+    address public veToken; // veToken for boost calculations
     uint256 public totalVotingPower; // Total voting power
     mapping(address => uint256) public userVotingPower; // User's voting power
     
@@ -134,6 +137,9 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     event UsdEntryModeChanged(bool useUsdMode);
     event LpAcquisitionRecorded(address indexed user, uint256 amount, uint256 timestamp);
     event JackpotTransferred(address indexed to, uint256 amount);
+    event VeTokenSet(address indexed veTokenAddress);
+    event LotteryEntry(address indexed user, uint256 wsAmount, uint256 probability);
+    event LotteryResult(address indexed user, bool won, uint256 threshold, uint256 probability);
 
     /**
      * @dev Circuit breaker modifier
@@ -158,69 +164,92 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     }
 
     /**
-     * @dev Process a buy and enter the lottery
-     * @param user The user who made the purchase
-     * @param wsAmount The amount of wSonic used
+     * @dev Process lottery result for a user
+     * @param user Address of the user
+     * @param randomness Random number to determine win/loss
      */
-    function processBuy(address user, uint256 wsAmount) public nonReentrant notPaused {
-        require(msg.sender == exchangePair, "Invalid context");
-        require(wsAmount >= MIN_WS_ENTRY, "Invalid wSonic amount");
-        require(!isContract(user), "Winner cannot be a contract");
-        
-        // Calculate probability and request randomness
-        uint256 probability = calculateProbability(wsAmount);
-        bytes32 requestId = verifier.requestRandomness();
-        
-        // Store request details
+    function processLotteryResult(address user, uint256 randomness) public {
+        require(msg.sender == address(vrfCoordinator) || msg.sender == address(this), "Only VRF coordinator or self");
+        require(lpToken.balanceOf(user) >= LP_HOLDING_REQUIREMENT, "Insufficient LP balance");
+
+        uint256 probability = calculateWinProbability(user, lastBuyAmount[user]);
+        uint256 threshold = (randomness % 10000) + 1; // 1-10000
+
+        if (threshold <= probability) {
+            // User won! Transfer jackpot
+            uint256 prize = jackpot;
+            jackpot = 0;
+            require(wrappedSonic.transfer(user, prize), "Prize transfer failed");
+            emit JackpotWon(user, prize);
+        }
+
+        emit LotteryResult(user, threshold <= probability, threshold, probability);
+    }
+
+    /**
+     * @dev Calculate win probability based on various factors
+     * @param user Address of the user
+     * @param wsAmount Amount of wS tokens used
+     * @return Probability of winning (in basis points)
+     */
+    function calculateWinProbability(address user, uint256 wsAmount) public view returns (uint256) {
+        require(lpToken.balanceOf(user) >= LP_HOLDING_REQUIREMENT, "Insufficient LP balance");
+
+        // Base probability (0.1% per 1 wS)
+        uint256 probability = (wsAmount * BASE_PROBABILITY) / 1e18;
+
+        // LP boost (up to 2x for holding required LP)
+        uint256 lpBalance = lpToken.balanceOf(user);
+        if (lpBalance >= LP_HOLDING_REQUIREMENT) {
+            uint256 lpBoost = ((lpBalance - LP_HOLDING_REQUIREMENT) * 100) / LP_HOLDING_REQUIREMENT;
+            if (lpBoost > 100) lpBoost = 100; // Cap at 2x
+            probability = probability * (100 + lpBoost) / 100;
+        }
+
+        // Red envelope boost
+        if (address(redEnvelope) != address(0)) {
+            uint256 envelopeBoost = redEnvelope.calculateBoost(user);
+            probability = probability * envelopeBoost / 100;
+        }
+
+        // Pity boost (up to 50% extra for consistent buyers)
+        if (pityBoost[user] > 0) {
+            uint256 pityMultiplier = 100 + ((pityBoost[user] * MAX_PITY_BOOST) / wsAmount);
+            probability = probability * pityMultiplier / 100;
+        }
+
+        return probability;
+    }
+
+    /**
+     * @dev Process a buy and potentially enter the lottery
+     * @param user Address of the user who made the buy
+     * @param wsAmount Amount of wS tokens used
+     */
+    function processBuy(address user, uint256 wsAmount) public {
+        require(msg.sender == exchangePair || msg.sender == address(this), "Only exchange pair or self");
+        require(wsAmount >= MIN_ENTRY_AMOUNT, "Amount below minimum");
+        require(lpToken.balanceOf(user) >= LP_HOLDING_REQUIREMENT, "Insufficient LP balance");
+
+        // Calculate win probability
+        uint256 probability = calculateWinProbability(user, wsAmount);
+        require(probability > 0, "Invalid probability");
+
+        // Request random number for lottery
+        bytes32 requestId = vrfCoordinator.requestRandomness();
         pendingRequests[requestId] = PendingRequest({
             user: user,
             wsAmount: wsAmount,
             probability: probability
         });
-        
-        // Emit the RandomnessRequested event with the correct signature
-        emit IVRFConsumer.RandomnessRequested(requestId);
-    }
 
-    /**
-     * @dev Process the lottery result after receiving randomness
-     * @param requestId The VRF request ID
-     * @param request The pending request details
-     * @param isWinner Whether the user won
-     */
-    function processLotteryResult(
-        bytes32 requestId,
-        PendingRequest memory request,
-        bool isWinner
-    ) internal {
-        if (isWinner && jackpot > 0) {
-            uint256 winAmount = jackpot;
-            
-            // Important: update state before external calls (reentrancy protection)
-            jackpot = 0;
-            totalWinners++;
-            totalPayouts += winAmount;
-            
-            // Transfer jackpot to winner
-            require(wrappedSonic.transfer(request.user, winAmount), "Jackpot transfer failed");
-            
-            emit JackpotWon(request.user, winAmount);
-            emit PityBoostReset();
-            
-            // Reset pity boost after win
-            accumulatedWSBoost = 0;
-            lastWinTimestamp = block.timestamp;
-        } else {
-            // Increase pity boost based on wS amount
-            uint256 boostAmount = (request.wsAmount * PITY_PERCENT_OF_SWAP) / PITY_DIVISOR;
-            uint256 newBoost = accumulatedWSBoost + boostAmount;
-            
-            // Cap the boost at MAX_PITY_BOOST
-            if (newBoost <= MAX_PITY_BOOST) {
-                accumulatedWSBoost = newBoost;
-                emit PityBoostIncreased(request.wsAmount, boostAmount, accumulatedWSBoost);
-            }
+        // Update pity boost if needed
+        if (wsAmount > lastBuyAmount[user]) {
+            pityBoost[user] = wsAmount;
         }
+        lastBuyAmount[user] = wsAmount;
+
+        emit LotteryEntry(user, wsAmount, probability);
     }
 
     /**
@@ -228,7 +257,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
      * @param requestId The request ID
      * @param randomWords The random values
      */
-    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external override {
+    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external virtual override {
         require(msg.sender == address(verifier), "Only verifier can fulfill");
         require(randomWords.length > 0, "No random values provided");
         
@@ -237,42 +266,36 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         
         // Calculate if user won based on probability
         uint256 randomValue = randomWords[0];
-        bool isWinner = randomValue % PROBABILITY_DENOMINATOR < request.probability;
         
         // Process the result
-        if (isWinner && jackpot > 0) {
-            uint256 winAmount = jackpot;
-            
-            // Important: update state before external calls (reentrancy protection)
-            jackpot = 0;
-            totalWinners++;
-            totalPayouts += winAmount;
-            
-            // Transfer jackpot to winner
-            require(wrappedSonic.transfer(request.user, winAmount), "Jackpot transfer failed");
-            
-            emit JackpotWon(request.user, winAmount);
-            emit PityBoostReset();
-            
-            // Reset pity boost after win
-            accumulatedWSBoost = 0;
-            lastWinTimestamp = block.timestamp;
-        } else {
-            // Increase pity boost based on wS amount
-            uint256 boostAmount = (request.wsAmount * PITY_PERCENT_OF_SWAP) / PITY_DIVISOR;
-            uint256 newBoost = accumulatedWSBoost + boostAmount;
-            
-            // Cap the boost at MAX_PITY_BOOST
-            if (newBoost <= MAX_PITY_BOOST) {
-                accumulatedWSBoost = newBoost;
-                emit PityBoostIncreased(request.wsAmount, boostAmount, accumulatedWSBoost);
-            }
-        }
-        
-        // Clean up
-        delete pendingRequests[requestId];
+        processLotteryResult(request.user, randomValue);
         
         emit RandomnessReceived(requestId, randomValue);
+    }
+
+    /**
+     * @dev Process random words from the VRF coordinator
+     * @param requestId The request ID
+     * @param randomWords The random values
+     */
+    function processRandomWords(uint256 requestId, uint256[] memory randomWords) external {
+        require(msg.sender == address(verifier), "Only verifier can call");
+        require(randomWords.length > 0, "No random values provided");
+        
+        // Convert the numeric ID back to bytes32
+        bytes32 bytesRequestId = bytes32(requestId);
+        
+        // Get the pending request
+        PendingRequest memory request = pendingRequests[bytesRequestId];
+        require(request.user != address(0), "Request not found");
+        
+        // Process the lottery result
+        processLotteryResult(request.user, randomWords[0]);
+        
+        // Clear the request
+        delete pendingRequests[bytesRequestId];
+        
+        emit RandomnessReceived(bytesRequestId, randomWords[0]);
     }
 
     /**
@@ -428,18 +451,18 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         // Apply LP boost if booster is set
         if (lpBooster != address(0)) {
             uint256 lpBoost = IRedDragonLPBooster(lpBooster).calculateBoost(user);
-            finalProbability = (finalProbability * lpBoost) / 100; // Divide by 100 since boost is in percentage
+            finalProbability = (finalProbability * lpBoost) / PRECISION; // Use PRECISION instead of 100
         }
         
         // Apply red envelope boost if contract is set
         if (address(redEnvelope) != address(0) && redEnvelope.hasRedEnvelope(user)) {
             uint256 redEnvelopeBoost = redEnvelope.calculateBoost(user);
-            finalProbability = (finalProbability * redEnvelopeBoost) / 100; // Divide by 100 since boost is in percentage
+            finalProbability = (finalProbability * redEnvelopeBoost) / PRECISION; // Use PRECISION instead of 100
         }
         
         // Apply pity timer boost
         if (accumulatedWSBoost > 0) {
-            finalProbability = (finalProbability * (100 + accumulatedWSBoost)) / 100;
+            finalProbability = (finalProbability * (PRECISION + accumulatedWSBoost)) / PRECISION;
         }
         
         return finalProbability;
@@ -469,7 +492,31 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
      */
     function calculateEffectiveProbability(address user, uint256 wsAmount) external view returns (uint256) {
         uint256 baseProbability = calculateBaseProbability(wsAmount);
-        return applyBoosts(user, baseProbability);
+        uint256 finalProbability = baseProbability;
+        
+        // Apply LP boost if booster is set
+        if (lpBooster != address(0)) {
+            uint256 lpBoost = IRedDragonLPBooster(lpBooster).calculateBoost(user);
+            finalProbability = (finalProbability * lpBoost) / PRECISION;
+        }
+        
+        // Apply red envelope boost if contract is set
+        if (address(redEnvelope) != address(0) && redEnvelope.hasRedEnvelope(user)) {
+            uint256 redEnvelopeBoost = redEnvelope.calculateBoost(user);
+            finalProbability = (finalProbability * redEnvelopeBoost) / PRECISION;
+        }
+        
+        // Apply pity timer boost
+        if (accumulatedWSBoost > 0) {
+            finalProbability = (finalProbability * (PRECISION + accumulatedWSBoost)) / PRECISION;
+        }
+        
+        // Apply user boost based on LP holdings and voting power
+        uint256 userBoost = calculateUserBoost(user);
+        finalProbability = (finalProbability * userBoost) / PRECISION;
+        
+        // Cap at MAX_PROBABILITY
+        return finalProbability > MAX_PROBABILITY ? MAX_PROBABILITY : finalProbability;
     }
     
     /**
@@ -485,7 +532,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
      * @dev Add tokens to the jackpot
      * @param amount Amount to add to jackpot
      */
-    function addToJackpot(uint256 amount) external notPaused {
+    function addToJackpot(uint256 amount) external virtual notPaused {
         require(amount > 0, "Amount must be greater than 0");
         wrappedSonic.safeTransferFrom(msg.sender, address(this), amount);
         jackpot += amount;
@@ -593,7 +640,7 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         if (useUsdEntryAmounts) {
             return (MIN_USD_ENTRY, MAX_USD_ENTRY, true);
         } else {
-            return (MIN_WS_ENTRY, MAX_WS_ENTRY, false);
+            return (MIN_ENTRY_AMOUNT, MAX_ENTRY_AMOUNT, false);
         }
     }
 
@@ -729,19 +776,9 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
      * @param amount Amount of LP tokens acquired
      */
     function recordLpAcquisition(address user, uint256 amount) external {
-        // Only allow calls from the LP token contract, LP booster, or owner
-        require(
-            msg.sender == address(lpToken) || 
-            msg.sender == lpBooster || 
-            msg.sender == owner(),
-            "Not authorized"
-        );
-        
-        // Only update if this is the first acquisition or a significant amount
-        if (lpAcquisitionTimestamp[user] == 0 || amount > 0) {
-            lpAcquisitionTimestamp[user] = block.timestamp;
-            emit LpAcquisitionRecorded(user, amount, block.timestamp);
-        }
+        require(msg.sender == owner() || msg.sender == address(lpToken), "Only owner or LP token");
+        lpAcquisitionTimestamp[user] = block.timestamp;
+        emit LpAcquisitionRecorded(user, amount, block.timestamp);
     }
     
     /**
@@ -788,57 +825,68 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
     }
     
     /**
-     * @dev Transfer jackpot to a specified address (only owner can call)
-     * Used for migration to upgraded contracts
-     * @param to Recipient address
+     * @dev Get jackpot token symbol
+     * @return symbol of the jackpot token
+     */
+    function getJackpotTokenSymbol() external view returns (string memory) {
+        try IERC20Metadata(address(wrappedSonic)).symbol() returns (string memory symbol) {
+            return symbol;
+        } catch {
+            return "wS";
+        }
+    }
+
+    /**
+     * @dev Get VRF configuration
+     * @return vrfCoordinator_ VRF coordinator address
+     * @return keyHash_ VRF key hash
+     * @return subscriptionId_ VRF subscription ID
+     */
+    function getVrfConfiguration() external view returns (
+        address vrfCoordinator_,
+        bytes32 keyHash_,
+        uint64 subscriptionId_
+    ) {
+        if (address(verifier) != address(0)) {
+            return verifier.getVRFConfiguration();
+        }
+        return (address(0), bytes32(0), 0);
+    }
+    
+    /**
+     * @dev Transfer jackpot to a specific address
+     * @param to Address to transfer jackpot to
      * @param amount Amount to transfer
      */
     function transferJackpotTo(address to, uint256 amount) external onlyOwner {
+        require(to != address(0), "Cannot transfer to zero address");
         require(amount <= jackpot, "Amount exceeds jackpot");
-        
-        // Update state before transfer (reentrancy protection)
         jackpot -= amount;
-        
-        // Transfer tokens to recipient
         wrappedSonic.safeTransfer(to, amount);
-        
         emit JackpotTransferred(to, amount);
     }
 
     /**
-     * @dev Check if VRF is enabled for this contract
-     * @return True if VRF is enabled
+     * @dev Check if VRF is enabled
+     * @return true if VRF is enabled
      */
-    function isVrfEnabled() external view override returns (bool) {
-        // VRF is enabled if we have a valid verifier
-        return address(verifier) != address(0);
+    function isVrfEnabled() external view virtual override returns (bool) {
+        return address(verifier) != address(0) && verifier.isVrfEnabled();
     }
     
     /**
-     * @dev Get the VRF configuration
-     * @return vrfCoordinatorAddress Address of the VRF coordinator
-     * @return keyHash VRF key hash
-     * @return subscriptionId VRF subscription ID
+     * @dev Request randomness from VRF
+     * @return requestId The request ID
      */
-    function getVRFConfiguration() external view override returns (
-        address vrfCoordinatorAddress,
-        bytes32 keyHash,
-        uint64 subscriptionId
-    ) {
-        // Get configuration from the verifier
-        return verifier.getVRFConfiguration();
-    }
-    
-    /**
-     * @dev Request randomness (not used directly, just to satisfy the interface)
-     * @return requestId The ID of the randomness request
-     */
-    function requestRandomness() external override returns (bytes32) {
-        // This lottery doesn't directly request randomness - it's done via the verifier
-        // But we need to implement this for the interface
-        bytes32 requestId = bytes32(0);
-        emit IVRFConsumer.RandomnessRequested(requestId);
-        return requestId;
+    function requestRandomness() external virtual override returns (bytes32) {
+        // Make sure the contract is not paused
+        require(!isPaused, "Contract is paused");
+        
+        // Make sure verifier is set
+        require(address(verifier) != address(0), "Verifier not set");
+        
+        // Request randomness from verifier
+        return verifier.requestRandomness();
     }
 
     /**
@@ -881,5 +929,40 @@ contract RedDragonSwapLottery is Ownable, ReentrancyGuard, Pausable, IVRFConsume
         
         // Apply all boosts
         return applyBoosts(msg.sender, baseProbability);
+    }
+
+    /**
+     * @dev Set the veToken address
+     * @param _veToken The new veToken address
+     */
+    function setVeToken(address _veToken) external onlyOwner {
+        require(_veToken != address(0), "veToken address cannot be zero");
+        veToken = _veToken;
+        emit VeTokenSet(_veToken);
+    }
+
+    /**
+     * @dev Update total voting power
+     * @param newTotalPower New total voting power
+     */
+    function updateTotalVotingPower(uint256 newTotalPower) external onlyOwner {
+        totalVotingPower = newTotalPower;
+    }
+
+    /**
+     * @dev Set the VRF coordinator address
+     * @param _vrfCoordinator The address of the VRF coordinator
+     */
+    function setVRFCoordinator(address _vrfCoordinator) external onlyOwner {
+        require(_vrfCoordinator != address(0), "VRF coordinator cannot be zero");
+        vrfCoordinator = IVRFCoordinator(_vrfCoordinator);
+    }
+
+    /**
+     * @dev Check if lottery is enabled
+     * @return true if lottery is enabled
+     */
+    function isLotteryEnabled() external view returns (bool) {
+        return !isPaused && verifier.isVrfEnabled();
     }
 } 

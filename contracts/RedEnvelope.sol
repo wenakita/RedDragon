@@ -15,10 +15,12 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
  * - Special boosts for early adopters
  * - Community contribution boosts
  */
-contract RedEnvelope is ERC721, Ownable, ReentrancyGuard {
+contract RedEnvelope is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard {
     // Constants for boost calculations
     uint256 private constant BOOST_PRECISION = 10000; // For 0.01% precision
     uint256 private constant MAX_BOOST = 1000; // Maximum 10% boost per envelope
+    uint256 private constant BASE_BOOST = 100; // Base 1x boost (100%)
+    uint256 private constant RARITY_BOOST_MULTIPLIER = 50; // 50% boost per rarity level
     
     // Token metadata
     string private _baseTokenURI;
@@ -72,10 +74,36 @@ contract RedEnvelope is ERC721, Ownable, ReentrancyGuard {
      * @dev Mint a new red envelope
      * @param to Recipient address
      * @param rarity Rarity level (1-5)
+     */
+    function mint(address to, uint256 rarity) external onlyOwner {
+        require(rarity >= 1 && rarity <= 5, "Invalid rarity");
+        require(to != address(0), "Cannot mint to zero address");
+        
+        uint256 tokenId = _nextTokenId;
+        _safeMint(to, tokenId);
+        
+        envelopeProperties[tokenId] = EnvelopeProperties({
+            rarity: rarity,
+            mintTimestamp: block.timestamp,
+            communityScore: 0,
+            isEarlyAdopter: false,
+            usageCount: 0
+        });
+        
+        _nextTokenId++;
+        
+        emit EnvelopeMinted(to, tokenId, rarity);
+    }
+    
+    /**
+     * @dev Mint a new red envelope with early adopter status
+     * @param to Recipient address
+     * @param rarity Rarity level (1-5)
      * @param isEarlyAdopter Whether the recipient is an early adopter
      */
-    function mint(address to, uint256 rarity, bool isEarlyAdopter) external onlyOwner {
+    function mintWithEarlyAdopter(address to, uint256 rarity, bool isEarlyAdopter) external onlyOwner {
         require(rarity >= 1 && rarity <= 5, "Invalid rarity");
+        require(to != address(0), "Cannot mint to zero address");
         
         uint256 tokenId = _nextTokenId;
         _safeMint(to, tokenId);
@@ -115,28 +143,28 @@ contract RedEnvelope is ERC721, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Calculate boost for a user
-     * @param user User to calculate boost for
-     * @return boostAmount The boost amount in BOOST_PRECISION units
+     * @dev Calculate boost amount for a user based on their red envelope rarity
+     * @param _user Address of the user to calculate boost for
+     * @return boostAmount The boost amount in percentage (100 = 1x)
      */
-    function calculateBoost(address user) external view returns (uint256) {
-        return balanceOf(user) > 0 ? 150 : 100; // 1.5x boost if user has a red envelope
-    }
-    
-    /**
-     * @dev Calculate contribution-based boost
-     * @param user User to calculate for
-     * @return boostAmount Contribution-based boost amount
-     */
-    function calculateContributionBoost(address user) internal view returns (uint256) {
-        if (totalCommunityContributions == 0) {
-            return 0;
+    function calculateBoost(address _user) external view returns (uint256) {
+        if (balanceOf(_user) == 0) {
+            return BASE_BOOST; // Return base boost (100) for non-holders
+        }
+
+        // Get the first token ID owned by the user
+        uint256 tokenId = tokenOfOwnerByIndex(_user, 0);
+        EnvelopeProperties memory props = envelopeProperties[tokenId];
+        
+        // Calculate boost based on rarity: 1.5x for Common (rarity 1), 1.75x for rarity 2, etc.
+        uint256 boost = BASE_BOOST + (props.rarity * 25);
+        
+        // Add early adopter bonus if applicable
+        if (props.isEarlyAdopter) {
+            boost += 50; // Additional 50% boost for early adopters
         }
         
-        // Boost is proportional to user's contribution percentage
-        // Max 1% boost for top contributors
-        uint256 userPercentage = (userContributions[user] * 100) / totalCommunityContributions;
-        return userPercentage > 100 ? 100 : userPercentage; // Cap at 1%
+        return boost;
     }
     
     /**
@@ -180,5 +208,23 @@ contract RedEnvelope is ERC721, Ownable, ReentrancyGuard {
         }
         
         emit SpecialEnvelopesMinted(specialRecipients, rarity);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC721, ERC721Enumerable)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 batchSize
+    ) internal override(ERC721, ERC721Enumerable) {
+        super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 } 

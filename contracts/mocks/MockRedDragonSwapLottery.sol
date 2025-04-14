@@ -1,102 +1,146 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "../interfaces/IRedDragonPaintSwapVerifier.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title MockRedDragonSwapLottery
- * @dev Mock implementation of RedDragonSwapLottery for testing
+ * @dev A simple mock implementation for testing
  */
-contract MockRedDragonSwapLottery is Ownable, ReentrancyGuard {
-    IERC20 public rewardToken;
+contract MockRedDragonSwapLottery {
+    using SafeERC20 for IERC20;
+    
+    // State variables
+    IERC20 public wrappedSonic;
     address public verifier;
-    address public votingToken;
     uint256 public jackpot;
+    address public exchangePair;
+    IERC20 public lpToken;
+    address public lpBooster;
+    address public redEnvelope;
+    address public priceOracle;
+    address public votingToken;
+    address public veToken;
+    bool public isPaused;
     
-    // Mapping for user voting power
-    mapping(address => uint256) private userVotingPower;
-    
-    // Mock boost value for testing
-    uint256 public mockBoost = 100; // Default 1x
+    // Events
+    event JackpotIncreased(uint256 amount);
     
     /**
-     * @dev Constructor
-     * @param _rewardToken The reward token address
-     * @param _verifier The verifier address
+     * @dev Constructor for mock
+     * @param _wrappedSonic Address of the wrapped Sonic token
+     * @param _verifier Address of the verifier (can be zero address for testing)
      */
-    constructor(address _rewardToken, address _verifier) {
-        rewardToken = IERC20(_rewardToken);
+    constructor(address _wrappedSonic, address _verifier) {
+        require(_wrappedSonic != address(0), "wS address cannot be zero");
+        wrappedSonic = IERC20(_wrappedSonic);
         verifier = _verifier;
         jackpot = 0;
+        isPaused = false;
     }
     
     /**
-     * @dev Set voting token address
-     * @param _votingToken The address of the voting token
+     * @dev Add to jackpot function for testing
+     * @param amount Amount to add to jackpot
      */
-    function setVotingToken(address _votingToken) external {
+    function addToJackpot(uint256 amount) public {
+        jackpot += amount;
+        emit JackpotIncreased(amount);
+    }
+    
+    /**
+     * @dev Set exchange pair address
+     */
+    function setExchangePair(address _exchangePair) public {
+        exchangePair = _exchangePair;
+    }
+    
+    /**
+     * @dev Set LP token address
+     */
+    function setLPToken(address _lpToken) public {
+        lpToken = IERC20(_lpToken);
+    }
+    
+    /**
+     * @dev Set Red Envelope address
+     */
+    function setRedEnvelope(address _redEnvelope) public {
+        redEnvelope = _redEnvelope;
+    }
+    
+    /**
+     * @dev Set LP Booster address
+     */
+    function setLPBooster(address _lpBooster) public {
+        lpBooster = _lpBooster;
+    }
+    
+    /**
+     * @dev Set Price Oracle address
+     */
+    function setPriceOracle(address _priceOracle) public {
+        priceOracle = _priceOracle;
+    }
+    
+    /**
+     * @dev Set Voting Token address
+     */
+    function setVotingToken(address _votingToken) public {
         votingToken = _votingToken;
     }
     
     /**
-     * @dev Update user's voting power
-     * @param _user User address
-     * @param _votingPower New voting power
+     * @dev Set VE Token address
      */
-    function updateUserVotingPower(address _user, uint256 _votingPower) external {
-        userVotingPower[_user] = _votingPower;
+    function setVeToken(address _veToken) public {
+        veToken = _veToken;
     }
     
     /**
-     * @dev Get user's voting power
-     * @param _user User address
-     * @return User's voting power
+     * @dev Record LP acquisition
      */
-    function getUserVotingPower(address _user) external view returns (uint256) {
-        return userVotingPower[_user];
+    function recordLpAcquisition(address user, uint256 amount) public {
+        // Mock implementation
     }
     
     /**
-     * @dev Add funds to jackpot
-     * @param _amount Amount to add
+     * @dev Get VRF configuration
      */
-    function addToJackpot(uint256 _amount) external {
-        jackpot += _amount;
+    function getVRFConfiguration() public pure returns (
+        address vrfCoordinatorAddress,
+        bytes32 keyHash,
+        uint64 subscriptionId
+    ) {
+        return (address(0x1), bytes32(0), 0);
     }
     
     /**
-     * @dev Get current jackpot amount
-     * @return Current jackpot
+     * @dev Check if VRF is enabled
      */
-    function getJackpot() external view returns (uint256) {
+    function isVrfEnabled() public pure returns (bool) {
+        return true;
+    }
+    
+    /**
+     * @dev Get probability for a user
+     */
+    function getProbability(address user) public pure returns (uint256) {
+        return 5000; // 50%
+    }
+    
+    /**
+     * @dev Get current jackpot size
+     */
+    function getCurrentJackpot() public view returns (uint256) {
         return jackpot;
     }
     
     /**
-     * @dev Mock function to calculate user boost
-     * @param _user User address
-     * @return Boost multiplier (100 = 1x, 250 = 2.5x)
+     * @dev Get lottery stats
      */
-    function calculateUserBoost(address _user) external view returns (uint256) {
-        return mockBoost;
-    }
-    
-    /**
-     * @dev Mock function to set boost value for testing
-     * @param _boost Boost value to set
-     */
-    function setMockBoost(uint256 _boost) external {
-        mockBoost = _boost;
-    }
-    
-    /**
-     * @dev Mock function to set exchange pair
-     * @param _exchangePair Exchange pair address
-     */
-    function setExchangePair(address _exchangePair) external onlyOwner {
-        // Mock implementation
+    function getStats() public view returns (uint256 winners, uint256 payouts, uint256 current) {
+        return (0, 0, jackpot);
     }
 } 

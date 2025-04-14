@@ -3,11 +3,11 @@
 // https://x.com/sonicreddragon
 // https://t.me/sonicreddragon
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.9;
 
 /**
  * @title IRedDragonPaintSwapVerifier
- * @dev Interface for the PaintSwap VRF verifier
+ * @dev Interface for the RedDragonPaintSwapVerifier contract
  */
 interface IRedDragonPaintSwapVerifier {
     /**
@@ -30,4 +30,6 @@ interface IRedDragonPaintSwapVerifier {
         bytes32 keyHash,
         uint64 subscriptionId
     );
+
+    function isVrfEnabled() external view returns (bool);
 } 

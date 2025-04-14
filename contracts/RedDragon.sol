@@ -32,66 +32,88 @@ interface IShadowRouter {
  */
 contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeMath for uint256;
     
-    // Fee structure
+    // Constants
     uint256 public constant FEE_DENOMINATOR = 10000;
+    uint256 public constant MAX_LOCK_DURATION = 365 days;
+    uint256 public constant MAX_SPECIAL_TRANSACTION_AMOUNT = 1000000 * 10**18;
+    uint256 public constant MAX_TRANSACTION_AMOUNT = 10000000 * 10**18;
+    uint256 public constant MAX_TOTAL_FEE = 1000; // 10%
+    uint256 public constant INITIAL_SUPPLY = 6_942_000 * 10**18;
+    uint256 public constant SPECIAL_LIMIT_TRANSACTIONS = 69;
+    uint256 public constant SPECIAL_WALLET_LIMIT_PERCENT = 100; // 1%
+    uint256 public constant POST_SPECIAL_WALLET_LIMIT_PERCENT = 1000; // 10%
+    uint256 public constant FEE_UPDATE_DELAY = 24 hours;
+    uint256 public constant ADMIN_ACTION_DELAY = 24 hours;
+    address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
     
-    // Buy Fees
-    uint256 public jackpotFeeBuy = 690;    // 6.9% = 690 basis points
-    uint256 public burnFeeBuy = 69;        // 0.69% = 69 basis points
-    uint256 public ve8020FeeBuy = 241;     // 2.41% = 241 basis points (combined liquidity and development)
-    uint256 public totalFeeBuy = 1000;     // 10% = 1000 basis points
+    // State variables
+    uint256 public transactionCount;
+    uint256 public lastFeeUpdate;
+    uint256 public totalBurned;
+    uint256 public totalJackpotFees;
+    uint256 public totalVe8020Fees;
+    uint256 public launchTimestamp;
+    uint256 public totalHolders;
+    
+    // Fee tracking variables for current transaction
+    uint256 private _jackpotFee;
+    uint256 private _burnFee;
+    uint256 private _ve8020Fee;
+    uint256 private _totalFee;
 
-    // Sell Fees
-    uint256 public jackpotFeeSell = 690;   // 6.9% = 690 basis points
-    uint256 public burnFeeSell = 69;       // 0.69% = 69 basis points
-    uint256 public ve8020FeeSell = 241;    // 2.41% = 241 basis points (combined liquidity and development)
+    // Buy fees (in basis points, 100 = 1%)
+    uint256 public buyBurnFee = 69;        // 0.69% = 69 basis points
+    uint256 public buyJackpotFee = 690;    // 6.9% = 690 basis points
+    uint256 public buyVe8020Fee = 241;     // 2.41% = 241 basis points
+    uint256 public totalFeeBuy = 1000;     // 10% = 1000 basis points
+    
+    // Sell fees (in basis points, 100 = 1%)
+    uint256 public sellBurnFee = 69;       // 0.69% = 69 basis points
+    uint256 public sellJackpotFee = 690;   // 6.9% = 690 basis points
+    uint256 public sellVe8020Fee = 241;    // 2.41% = 241 basis points
     uint256 public totalFeeSell = 1000;    // 10% = 1000 basis points
 
     // Regular Fees
-    uint256 public jackpotFeeRegular = 690; // 6.9% = 690 basis points
-    uint256 public burnFeeRegular = 69;     // 0.69% = 69 basis points
-    uint256 public ve8020FeeRegular = 241;  // 2.41% = 241 basis points (combined liquidity and development)
-    uint256 public totalFeeRegular = 1000;  // 10% = 1000 basis points
-
-    // Current active fees
+    uint256 public jackpotFeeRegular;
+    uint256 public burnFeeRegular;
+    uint256 public ve8020FeeRegular;
+    uint256 public totalFeeRegular;
+    
+    // Current Fees
     uint256 public jackpotFee;
     uint256 public burnFee;
     uint256 public ve8020Fee;
     uint256 public totalFee;
     
-    // Supply and limits
-    uint256 public constant INITIAL_SUPPLY = 6_942_000 * 10**18;
-    
-    // Special transaction period
-    uint256 public constant SPECIAL_LIMIT_TRANSACTIONS = 69;
-    uint256 public transactionCount = 0; // Tracks number of transactions for special limit purposes
-    
-    // First 69 transactions: 1% max tx, 2% max wallet
-    uint256 public constant SPECIAL_WALLET_LIMIT = (INITIAL_SUPPLY * 200) / 10000; // 2% of total supply
-    uint256 public constant POST_SPECIAL_WALLET_LIMIT = (INITIAL_SUPPLY * 1000) / 10000; // 10% of supply
-    
-    address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
+    // Addresses
+    address public jackpotAddress;
+    address public ve8020Address;
+    address public burnAddress;
+    address public wrappedSonicAddress;
+    address public exchangePair;
+    address public lotteryAddress;
 
     // Trading state
     bool public tradingEnabled = false;
     bool public tradingEnabledPermanently = false;
     bool private inSwap = false;
-    address public exchangePair;
-    mapping(address => bool) public isFeeExempt;
+    bool private _transferOptimization = true;
+    bool public ownershipLocked = false;
     
-    // Addresses
-    address public jackpotAddress;
-    address public ve8020Address; // Combined liquidity and development address (fe8020FeeDistributor)
-    address public burnAddress;
-    address public wrappedSonicAddress;
-
+    // Mappings
+    mapping(address => bool) public isFeeExempt;
+    mapping(address => uint256) public lastTransferTimestamp;
+    mapping(address => bool) private _optimizedTransfers;
+    mapping(bytes32 => uint256) public pendingActions;
+    mapping(bytes32 => string) public pendingActionDescriptions;
+    
     // Interfaces
     IERC20 public wrappedSonic;
-
-    // Transfer optimization
-    bool private _transferOptimization = true;
-    mapping(address => bool) private _optimizedTransfers;
+    
+    // Holder tracking
+    EnumerableSet.AddressSet private _holders;
     
     // Events
     event FeesDistributed(uint256 amount);
@@ -105,32 +127,25 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     event ActionCancelled(bytes32 indexed actionId, string actionDescription);
     event OwnershipRenounced();
     event Ve8020AddressUpdated(address indexed newAddress);
+    event OwnershipLocked(uint256 duration);
+    event TokensTransferred(
+        address indexed from,
+        address indexed to,
+        uint256 transferAmount,
+        uint256 burnAmount,
+        uint256 jackpotAmount,
+        uint256 veAmount
+    );
+    event FeeCollected(address indexed from, uint256 burnAmount, uint256 jackpotAmount, uint256 ve8020Amount);
+    event BuyFeesUpdated(uint256 burnFee, uint256 jackpotFee, uint256 ve8020Fee);
+    event SellFeesUpdated(uint256 burnFee, uint256 jackpotFee, uint256 ve8020Fee);
+    event FeeExemptUpdated(address indexed account, bool exempt);
     
-    // Fee update timelock
-    uint256 public constant FEE_UPDATE_DELAY = 24 hours;
-    uint256 public lastFeeUpdate;
+    // Fee structure
+    uint256 public constant SPECIAL_WALLET_LIMIT = INITIAL_SUPPLY * 69 / 10000;    // 0.69% of initial supply
+    uint256 public constant POST_SPECIAL_WALLET_LIMIT = INITIAL_SUPPLY * 420 / 10000; // 4.20% of initial supply
+    uint256 public constant SPECIAL_TRANSACTION_COUNT = 69;  // Number of special transactions
     
-    // Admin action timelock
-    uint256 public constant ADMIN_ACTION_DELAY = 24 hours;
-    mapping(bytes32 => uint256) public pendingActions;
-    mapping(bytes32 => string) public pendingActionDescriptions;
-    
-    // Ownership lock state
-    bool public ownershipLocked = false;
-    
-    // Token stats for transparency
-    uint256 public totalBurned;
-    uint256 public totalJackpotFees;
-    uint256 public totalVe8020Fees;
-    uint256 public launchTimestamp;
-    
-    // Holder tracking
-    EnumerableSet.AddressSet private _holders;
-    uint256 public totalHolders;
-    
-    // Lottery interaction
-    address public lotteryAddress;
-
     // Track wS balance before and after swap to calculate the exact wS amount used
     uint256 private _preBuyWSBalance;
     bool private _trackingBuy;
@@ -161,7 +176,25 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
         // Initialize exchange pair
         exchangePair = address(0);
 
-        // Initialize fees
+        // Initialize buy fees (10% total)
+        buyJackpotFee = 690; // 6.9%
+        buyBurnFee = 69;     // 0.69%
+        buyVe8020Fee = 241;  // 2.41%
+        totalFeeBuy = buyJackpotFee + buyBurnFee + buyVe8020Fee;
+
+        // Initialize sell fees (same as buy fees)
+        sellJackpotFee = 690; // 6.9%
+        sellBurnFee = 69;     // 0.69%
+        sellVe8020Fee = 241;  // 2.41%
+        totalFeeSell = sellJackpotFee + sellBurnFee + sellVe8020Fee;
+
+        // Initialize regular fees (same as buy fees)
+        jackpotFeeRegular = 690; // 6.9%
+        burnFeeRegular = 69;     // 0.69%
+        ve8020FeeRegular = 241;  // 2.41%
+        totalFeeRegular = jackpotFeeRegular + burnFeeRegular + ve8020FeeRegular;
+
+        // Initialize current fees
         regularFees();
 
         // Mint initial supply to owner
@@ -226,97 +259,91 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Override the _transfer function to implement security measures
      */
-    function _transfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal virtual override {
-        require(from != address(0), "ERC20: transfer from the zero address");
-        require(to != address(0), "ERC20: transfer to the zero address");
+    function _transfer(address from, address to, uint256 amount) internal virtual override {
+        require(from != address(0), "Transfer from zero address");
+        require(to != address(0), "Transfer to zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
-        
-        // Check if trading is enabled
-        if (!tradingEnabled) {
-            require(isFeeExempt[from] || isFeeExempt[to], "Trading is not enabled");
+
+        // Check wallet limits if neither address is fee exempt
+        if (!isFeeExempt[from] && !isFeeExempt[to]) {
+            // Check transaction limit based on special period
+            uint256 maxTxAmount;
+            uint256 maxWalletAmount;
+            
+            if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
+                // Special period - use fixed limits (0.69% of initial supply)
+                maxTxAmount = SPECIAL_WALLET_LIMIT;
+                maxWalletAmount = SPECIAL_WALLET_LIMIT;
+            } else {
+                // Regular period - use percentage limits (4.2% of initial supply)
+                maxTxAmount = POST_SPECIAL_WALLET_LIMIT;
+                maxWalletAmount = POST_SPECIAL_WALLET_LIMIT;
+            }
+            
+            // Enforce transaction amount limit
+            require(amount <= maxTxAmount, "Amount exceeds special transaction limit");
+            
+            // Enforce recipient wallet limit
+            require(balanceOf(to).add(amount) <= maxWalletAmount, "Transfer would exceed recipient wallet limit");
         }
 
-        // Check transaction limits
-        if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
-            require(amount <= SPECIAL_WALLET_LIMIT, "Amount exceeds special transaction limit");
-            require(balanceOf(to) + amount <= SPECIAL_WALLET_LIMIT, "Balance would exceed special wallet limit");
-        } else {
-            require(amount <= POST_SPECIAL_WALLET_LIMIT, "Amount exceeds transaction limit");
-            require(balanceOf(to) + amount <= POST_SPECIAL_WALLET_LIMIT, "Balance would exceed wallet limit");
+        // Determine fees based on transfer type
+        uint256 transferBurnFee = 0;
+        uint256 transferJackpotFee = 0;
+        uint256 transferVe8020Fee = 0;
+        uint256 transferTotalFee = 0;
+
+        if (shouldTakeFee(from)) {
+            if (from == exchangePair) {
+                // Buy fees
+                transferBurnFee = amount.mul(buyBurnFee).div(FEE_DENOMINATOR);
+                transferJackpotFee = amount.mul(buyJackpotFee).div(FEE_DENOMINATOR);
+                transferVe8020Fee = amount.mul(buyVe8020Fee).div(FEE_DENOMINATOR);
+            } else if (to == exchangePair) {
+                // Sell fees
+                transferBurnFee = amount.mul(sellBurnFee).div(FEE_DENOMINATOR);
+                transferJackpotFee = amount.mul(sellJackpotFee).div(FEE_DENOMINATOR);
+                transferVe8020Fee = amount.mul(sellVe8020Fee).div(FEE_DENOMINATOR);
+            } else {
+                // Regular transfer fees
+                transferBurnFee = amount.mul(burnFeeRegular).div(FEE_DENOMINATOR);
+                transferJackpotFee = amount.mul(jackpotFeeRegular).div(FEE_DENOMINATOR);
+                transferVe8020Fee = amount.mul(ve8020FeeRegular).div(FEE_DENOMINATOR);
+            }
+            transferTotalFee = transferBurnFee.add(transferJackpotFee).add(transferVe8020Fee);
         }
 
-        // Increment transaction count before transfer
-        transactionCount++;
-        
-        // Check if this is a swap (buying or selling)
-        bool isSwap = (exchangePair != address(0)) && (from == exchangePair || to == exchangePair);
-        bool isBuy = isSwap && from == exchangePair;
-        bool isSell = isSwap && to == exchangePair;
-        
-        // Set appropriate fees before any transfers
-        if (isSwap && !inSwap) {
-            if (isBuy) {
-                buyFees();  // Buy fees
-            } else if (isSell) {
-                sellFees(); // Sell fees
+        // Transfer fees directly to their destinations
+        if (transferTotalFee > 0) {
+            // Send burn fee directly to burn address
+            if (transferBurnFee > 0) {
+                super._transfer(from, burnAddress, transferBurnFee);
             }
-        } else {
-            regularFees(); // Regular transfer fees
-        }
-        
-        // Get pre-transfer wS balance for buys (to calculate wS amount used)
-        uint256 preBuyWSBalance = 0;
-        if (isBuy && !inSwap && lotteryAddress != address(0)) {
-            preBuyWSBalance = wrappedSonic.balanceOf(exchangePair);
-        }
-        
-        // Check if fees should be taken
-        bool takeFee = !inSwap && !isFeeExempt[from] && !isFeeExempt[to];
-        
-        if (takeFee) {
-            // Calculate fee amounts
-            uint256 feeAmount = (amount * totalFee) / FEE_DENOMINATOR;
-            uint256 transferAmount = amount - feeAmount;
             
-            // Transfer remaining amount to recipient
-            super._transfer(from, to, transferAmount);
+            // Send jackpot fee directly to jackpot address
+            if (transferJackpotFee > 0) {
+                super._transfer(from, jackpotAddress, transferJackpotFee);
+            }
             
-            // Transfer fee amount to contract
-            if (feeAmount > 0) {
-                super._transfer(from, address(this), feeAmount);
-                                
-                // Distribute fees immediately
-                _distributeFees(feeAmount);
+            // Send ve8020 fee directly to ve8020 address
+            if (transferVe8020Fee > 0) {
+                super._transfer(from, ve8020Address, transferVe8020Fee);
             }
-        } else {
-            super._transfer(from, to, amount);
+            
+            emit FeeCollected(from, transferBurnFee, transferJackpotFee, transferVe8020Fee);
         }
+
+        // Transfer remaining amount
+        super._transfer(from, to, amount.sub(transferTotalFee));
         
-        // Handle lottery entry for buys after transfer is complete
-        if (isBuy && !inSwap && lotteryAddress != address(0)) {
-            // Calculate wS used in the swap by checking the balance difference
-            uint256 postBuyWSBalance = wrappedSonic.balanceOf(exchangePair);
-            if (postBuyWSBalance < preBuyWSBalance) {
-                uint256 wsAmount = preBuyWSBalance - postBuyWSBalance;
-                // Only enter lottery if minimum wS amount was used
-                if (wsAmount > 0) {
-                    emit SwapDetected(from, to, true, wsAmount);
-                    _handleLotteryEntry(tx.origin, wsAmount);
-                }
-            }
+        // Update transaction count
+        if (!isFeeExempt[from] && !isFeeExempt[to]) {
+            transactionCount = transactionCount.add(1);
         }
-        
-        // Increment transaction counter if not from or to owner/contract
-        if (from != owner() && from != address(this) && to != owner() && to != address(this)) {
-            // Check if this transaction will end the special period
-            if (transactionCount == SPECIAL_LIMIT_TRANSACTIONS - 1) {
-                emit SpecialTransactionPeriodEnded(block.timestamp);
-            }
-            transactionCount++;
+
+        // Handle lottery entry if buying
+        if (from == exchangePair && !isFeeExempt[to]) {
+            _handleLotteryEntry(to, amount);
         }
     }
 
@@ -347,16 +374,16 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     }
 
     function buyFees() internal {
-        jackpotFee = jackpotFeeBuy;
-        burnFee = burnFeeBuy;
-        ve8020Fee = ve8020FeeBuy;
+        jackpotFee = buyJackpotFee;
+        burnFee = buyBurnFee;
+        ve8020Fee = buyVe8020Fee;
         totalFee = totalFeeBuy;
     }
 
     function sellFees() internal {
-        jackpotFee = jackpotFeeSell;
-        burnFee = burnFeeSell;
-        ve8020Fee = ve8020FeeSell;
+        jackpotFee = sellJackpotFee;
+        burnFee = sellBurnFee;
+        ve8020Fee = sellVe8020Fee;
         totalFee = totalFeeSell;
     }
 
@@ -372,46 +399,25 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
     }
 
     // Admin functions to update fees
-    function setBuyFees(
-        uint256 _jackpotFee,
-        uint256 _burnFee,
-        uint256 _ve8020Fee
-    ) external onlyOwner {
-        require(block.timestamp >= lastFeeUpdate + FEE_UPDATE_DELAY, "Fee update too soon");
-        require(_jackpotFee <= 500, "Jackpot fee too high");
-        require(_burnFee <= 100, "Burn fee too high");
-        require(_ve8020Fee <= 100, "Ve8020 fee too high");
-        
-        uint256 newTotalFee = _jackpotFee + _burnFee + _ve8020Fee;
-        require(newTotalFee <= 1000, "Total fee too high");
-        
-        jackpotFeeBuy = _jackpotFee;
-        burnFeeBuy = _burnFee;
-        ve8020FeeBuy = _ve8020Fee;
-        totalFeeBuy = newTotalFee;
-        
-        lastFeeUpdate = block.timestamp;
+    function setBuyFees(uint256 burnFee_, uint256 jackpotFee_, uint256 ve8020Fee_) external onlyOwner {
+        require(burnFee_ + jackpotFee_ + ve8020Fee_ <= MAX_TOTAL_FEE, "Total fee too high");
+        buyBurnFee = burnFee_;
+        buyJackpotFee = jackpotFee_;
+        buyVe8020Fee = ve8020Fee_;
+        emit BuyFeesUpdated(burnFee_, jackpotFee_, ve8020Fee_);
     }
 
-    function setSellFees(
-        uint256 _jackpotFee,
-        uint256 _burnFee,
-        uint256 _ve8020Fee
-    ) external onlyOwner {
-        require(block.timestamp >= lastFeeUpdate + FEE_UPDATE_DELAY, "Fee update too soon");
-        require(_jackpotFee <= 500, "Jackpot fee too high");
-        require(_burnFee <= 100, "Burn fee too high");
-        require(_ve8020Fee <= 100, "Ve8020 fee too high");
-        
-        uint256 newTotalFee = _jackpotFee + _burnFee + _ve8020Fee;
-        require(newTotalFee <= 1000, "Total fee too high");
-        
-        jackpotFeeSell = _jackpotFee;
-        burnFeeSell = _burnFee;
-        ve8020FeeSell = _ve8020Fee;
-        totalFeeSell = newTotalFee;
-        
-        lastFeeUpdate = block.timestamp;
+    function setSellFees(uint256 burnFee_, uint256 jackpotFee_, uint256 ve8020Fee_) external onlyOwner {
+        require(burnFee_ + jackpotFee_ + ve8020Fee_ <= MAX_TOTAL_FEE, "Total fee too high");
+        sellBurnFee = burnFee_;
+        sellJackpotFee = jackpotFee_;
+        sellVe8020Fee = ve8020Fee_;
+        emit SellFeesUpdated(burnFee_, jackpotFee_, ve8020Fee_);
+    }
+
+    function setFeeExempt(address _account, bool _exempt) external onlyOwner {
+        isFeeExempt[_account] = _exempt;
+        emit FeeExemptUpdated(_account, _exempt);
     }
 
     /**
@@ -440,20 +446,16 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
         inSwap = _inSwap;
     }
 
-    function setFeeExempt(address account, bool exempt) external onlyOwner {
-        require(account != address(0), "Cannot exempt zero address");
-        isFeeExempt[account] = exempt;
-    }
-
-    // Lottery interaction
-    function _handleLotteryEntry(address user, uint256 wsAmount) private {
+    /**
+     * @dev Handle lottery entry for a user
+     * @param _user Address of the user
+     * @param _wsAmount Amount of wS tokens
+     */
+    function _handleLotteryEntry(address _user, uint256 _wsAmount) private {
+        // Ensure lottery contract is set
         if (lotteryAddress != address(0)) {
-            // Always pass tx.origin as the user to ensure jackpot goes to the actual user, not aggregators/bots
-            address actualUser = tx.origin;
-            require(actualUser != address(0), "Invalid user address");
-            require(!isContract(actualUser), "Contracts cannot participate in lottery");
-            
-            try IRedDragonSwapLottery(lotteryAddress).processBuy(actualUser, wsAmount) {} catch {}
+            // Try to process lottery entry
+            try IRedDragonSwapLottery(lotteryAddress).processBuy(_user, _wsAmount) {} catch {}
         }
     }
     
@@ -495,24 +497,25 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
 
     /**
      * @dev Get current transaction limit based on transaction count
-     * @return The current maximum transaction amount (1% for first 69 tx, 5% after)
+     * @return The current maximum transaction amount (1% for first 69 tx, 10% after)
      */
     function getCurrentTransactionLimit() public view returns (uint256) {
         if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
-            return SPECIAL_WALLET_LIMIT; // 2% during first 69 transactions
+            return SPECIAL_WALLET_LIMIT; // 1% during first 69 transactions
         }
         return POST_SPECIAL_WALLET_LIMIT; // 10% after first 69 transactions
     }
 
     /**
      * @dev Get current wallet limit based on transaction count
-     * @return The current maximum wallet amount (2% for first 69 tx, 10% after)
+     * @return The current maximum wallet amount (1% for first 69 tx, 10% after)
      */
     function getCurrentWalletLimit() public view returns (uint256) {
+        uint256 totalSupply = totalSupply();
         if (transactionCount < SPECIAL_LIMIT_TRANSACTIONS) {
-            return SPECIAL_WALLET_LIMIT; // 2% during first 69 transactions
+            return totalSupply.mul(SPECIAL_WALLET_LIMIT_PERCENT).div(10000); // 1% during first 69 transactions
         }
-        return POST_SPECIAL_WALLET_LIMIT; // 10% after first 69 transactions
+        return totalSupply.mul(POST_SPECIAL_WALLET_LIMIT_PERCENT).div(10000); // 10% after first 69 transactions
     }
 
     /**
@@ -664,9 +667,12 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Lock all direct admin functions to enforce timelock usage
      * This enhances security by requiring all admin actions to use timelock
      */
-    function lockOwnership() external onlyOwner {
+    function lockOwnership(uint256 _lockDuration) external onlyOwner {
         require(!ownershipLocked, "Ownership already locked");
+        require(_lockDuration > 0 && _lockDuration <= MAX_LOCK_DURATION, "Invalid lock duration");
+        
         ownershipLocked = true;
+        emit OwnershipLocked(_lockDuration);
     }
     
     /**
@@ -677,16 +683,11 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
         bytes32 actionId = getActionId("renounceOwnership", "");
         require(isActionReady(actionId), "Timelock not expired");
         
-        // Clear the pending action
-        delete pendingActions[actionId];
-        string memory description = pendingActionDescriptions[actionId];
-        delete pendingActionDescriptions[actionId];
-        
         // Execute ownership renouncement
         _transferOwnership(address(0));
         
         emit OwnershipRenounced();
-        emit ActionExecuted(actionId, description);
+        emit ActionExecuted(actionId, "Renounce ownership");
     }
     
     // Transparency functions
@@ -713,13 +714,13 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
         uint256 totalFeeSell_
     ) {
         return (
-            jackpotFeeBuy,
-            burnFeeBuy,
-            ve8020FeeBuy,
+            buyJackpotFee,
+            buyBurnFee,
+            buyVe8020Fee,
             totalFeeBuy,
-            jackpotFeeSell,
-            burnFeeSell,
-            ve8020FeeSell,
+            sellJackpotFee,
+            sellBurnFee,
+            sellVe8020Fee,
             totalFeeSell
         );
     }
@@ -922,14 +923,14 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
 
     /**
      * @dev Schedule a fee update
-     * @param _jackpotFee New jackpot fee
-     * @param _burnFee New burn fee
-     * @param _ve8020Fee New ve8020 fee
+     * @param newJackpotFee New jackpot fee
+     * @param newBurnFee New burn fee
+     * @param newVe8020Fee New ve8020 fee
      */
-    function scheduleFeeUpdate(uint256 _jackpotFee, uint256 _burnFee, uint256 _ve8020Fee) external onlyOwner {
-        uint256 totalNewFee = _jackpotFee + _burnFee + _ve8020Fee;
+    function scheduleFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe8020Fee) external onlyOwner {
+        uint256 totalNewFee = newJackpotFee + newBurnFee + newVe8020Fee;
         require(totalNewFee <= 1000, "Total fee cannot exceed 10%");
-        bytes32 actionId = keccak256(abi.encodePacked("updateFees", _jackpotFee, _burnFee, _ve8020Fee));
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe8020Fee));
         pendingActions[actionId] = block.timestamp + FEE_UPDATE_DELAY;
         pendingActionDescriptions[actionId] = "Update fees";
         emit ActionScheduled(actionId, "Update fees", block.timestamp + FEE_UPDATE_DELAY);
@@ -937,17 +938,17 @@ contract RedDragon is ERC20, Ownable, ReentrancyGuard {
 
     /**
      * @dev Execute a scheduled fee update
-     * @param _jackpotFee New jackpot fee
-     * @param _burnFee New burn fee
-     * @param _ve8020Fee New ve8020 fee
+     * @param newJackpotFee New jackpot fee
+     * @param newBurnFee New burn fee
+     * @param newVe8020Fee New ve8020 fee
      */
-    function executeFeeUpdate(uint256 _jackpotFee, uint256 _burnFee, uint256 _ve8020Fee) external onlyOwner {
-        bytes32 actionId = keccak256(abi.encodePacked("updateFees", _jackpotFee, _burnFee, _ve8020Fee));
+    function executeFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe8020Fee) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe8020Fee));
         require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
-        jackpotFee = _jackpotFee;
-        burnFee = _burnFee;
-        ve8020Fee = _ve8020Fee;
-        totalFee = _jackpotFee + _burnFee + _ve8020Fee;
+        jackpotFee = newJackpotFee;
+        burnFee = newBurnFee;
+        ve8020Fee = newVe8020Fee;
+        totalFee = newJackpotFee + newBurnFee + newVe8020Fee;
         delete pendingActions[actionId];
         emit ActionExecuted(actionId, "Update fees");
     }

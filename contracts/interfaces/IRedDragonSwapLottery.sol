@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.9;
 
 /**
  * @dev Interface for RedDragonSwapLottery contract
@@ -23,7 +23,7 @@ interface IRedDragonSwapLottery {
      * @dev Increases the jackpot by depositing wS tokens
      * @param amount Amount of wS tokens to add to the jackpot
      */
-    function increaseJackpot(uint256 amount) external;
+    function addToJackpot(uint256 amount) external;
     
     /**
      * @dev Sets token's voting power in the lottery for boost calculation
@@ -44,12 +44,21 @@ interface IRedDragonSwapLottery {
      */
     function accumulatedWSBoost() external view returns (uint256);
 
-    function secureProcessBuy(address user, uint256 amount) external;
-    function addToJackpot(uint256 amount) external;
-    function updateProbability(uint256 newProbability) external;
+    /**
+     * @dev Process random words from VRF
+     * @param requestId The request ID
+     * @param randomWords The random values
+     */
+    function processRandomWords(uint256 requestId, uint256[] memory randomWords) external;
+    
     function getCurrentJackpot() external view returns (uint256);
     function getStats() external view returns (uint256 winners, uint256 payouts, uint256 current);
     function getSwapLimits() external view returns (uint256 min, uint256 max, bool isUsdMode);
+    function getJackpotTokenSymbol() external view returns (string memory);
+    function isLotteryEnabled() external view returns (bool);
+
+    function secureProcessBuy(address user, uint256 amount) external;
+    function updateProbability(uint256 newProbability) external;
     function setExchangePair(address _exchangePair) external;
     function getLastWinner() external view returns (address);
     function getLastWinAmount() external view returns (uint256);
@@ -80,8 +89,4 @@ interface IRedDragonSwapLottery {
     
     // Security/checks
     function isFlashLoanAttack(address from, address to) external returns (bool);
-
-    function isLotteryEnabled() external view returns (bool);
-    function getJackpotTokenSymbol() external view returns (string memory);
-    function processRandomWords(uint256 requestId, uint256[] memory randomWords) external;
 } 

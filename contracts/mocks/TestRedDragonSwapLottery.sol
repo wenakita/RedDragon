@@ -14,11 +14,10 @@ abstract contract TestRedDragonSwapLottery is RedDragonSwapLottery {
      * @dev Expose the internal processLotteryResult function for testing
      */
     function testProcessLotteryResult(
-        bytes32 requestId,
-        PendingRequest memory request,
-        bool isWinner
+        address user,
+        uint256 randomness
     ) external {
-        processLotteryResult(requestId, request, isWinner);
+        processLotteryResult(user, randomness);
     }
 
     /**
@@ -26,5 +25,21 @@ abstract contract TestRedDragonSwapLottery is RedDragonSwapLottery {
      */
     function testIsSecureContext(address user) external view returns (bool) {
         return isSecureContext(user);
+    }
+
+    function fulfillRandomness(bytes32 requestId, uint256[] memory randomWords) external override {
+        require(msg.sender == address(verifier), "Only verifier can fulfill");
+        require(randomWords.length > 0, "No random values provided");
+        
+        PendingRequest memory request = pendingRequests[requestId];
+        require(request.user != address(0), "Request not found");
+        
+        // Calculate if user won based on probability
+        uint256 randomValue = randomWords[0];
+        
+        // Process the result
+        processLotteryResult(request.user, randomValue);
+        
+        emit RandomnessReceived(requestId, randomValue);
     }
 } 

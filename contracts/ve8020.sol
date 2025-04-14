@@ -67,37 +67,9 @@ contract ve8020 is Ownable, ReentrancyGuard {
      * @param _user Address of the user
      * @return User's current voting power
      */
-    function balanceOf(address _user) public view returns (uint256) {
-        uint256 userEpoch = userPointEpoch[_user];
-        if (userEpoch == 0) {
-            return 0;
-        }
-        
-        Point memory point = userPointHistory[_user][userEpoch];
-        
-        // Calculate current voting power using linear decay
-        uint256 timeDiff = 0;
-        if (block.timestamp > point.timestamp) {
-            timeDiff = block.timestamp - point.timestamp;
-        }
-        
-        // Avoid underflow if the user's lock has expired
-        if (timeDiff >= MAX_LOCK_TIME || point.bias <= point.slope * timeDiff) {
-            return 0;
-        }
-        
-        // Calculate voting power with linear decay
-        uint256 votingPower = point.bias - point.slope * timeDiff;
-        
-        // Get the user's lock
+    function balanceOf(address _user) external view returns (uint256) {
         LockedBalance memory userLock = locked[_user];
-        
-        // If the lock has expired, return 0
-        if (block.timestamp >= userLock.unlockTime) {
-            return 0;
-        }
-        
-        return votingPower;
+        return calculateVotingPower(userLock.amount, userLock.unlockTime);
     }
     
     /**
@@ -114,46 +86,47 @@ contract ve8020 is Ownable, ReentrancyGuard {
      * @param _unlockTime Future time when tokens unlock
      */
     function createLock(uint256 _value, uint256 _unlockTime) external nonReentrant {
-        LockedBalance storage userLocked = locked[msg.sender];
-        
-        // Check if the unlock time is valid (between min and max lock time)
-        uint256 unlockTime = (_unlockTime / WEEK) * WEEK; // Round down to whole weeks
-        require(unlockTime > block.timestamp, "Lock time must be in the future");
-        require(unlockTime >= block.timestamp + MIN_LOCK_TIME, "Lock time too short");
-        require(unlockTime <= block.timestamp + MAX_LOCK_TIME, "Lock time too long");
-        
         require(_value > 0, "Must lock non-zero amount");
-        
-        // Check if the user already has a lock
-        if (userLocked.amount > 0) {
-            // User has an existing lock
-            require(unlockTime > userLocked.unlockTime, "Cannot decrease lock time");
-            require(userLocked.unlockTime > block.timestamp, "Lock expired");
-            
-            // Calculate new voting power
-            _checkpoint(msg.sender, userLocked, LockedBalance({
-                amount: userLocked.amount + _value,
-                unlockTime: unlockTime
-            }));
-        } else {
-            // New lock
-            _checkpoint(msg.sender, LockedBalance({
-                amount: 0,
-                unlockTime: 0
-            }), LockedBalance({
-                amount: _value,
-                unlockTime: unlockTime
-            }));
-        }
-        
-        // Update user's lock
-        userLocked.amount += _value;
-        userLocked.unlockTime = unlockTime;
-        
-        // Transfer LP tokens from user to contract
+        require(_unlockTime > block.timestamp, "Lock time must be in the future");
+        require(_unlockTime >= block.timestamp + MIN_LOCK_TIME, "Lock time must be at least 1 week");
+        require(_unlockTime <= block.timestamp + MAX_LOCK_TIME, "Lock time too long");
+
+        LockedBalance storage userLock = locked[msg.sender];
+        require(userLock.amount == 0, "Lock already exists");
+
+        // Transfer tokens to contract
         require(lpToken.transferFrom(msg.sender, address(this), _value), "Transfer failed");
-        
-        emit Deposit(msg.sender, _value, unlockTime, block.timestamp);
+
+        // Update locked balance
+        userLock.amount = _value;
+        userLock.unlockTime = _unlockTime;
+
+        // Calculate voting power
+        uint256 votingPower = calculateVotingPower(_value, _unlockTime);
+
+        // Update total supply
+        uint256 prevSupply = totalSupply;
+        totalSupply = prevSupply + votingPower;
+
+        // Update user point history
+        userPointEpoch[msg.sender] += 1;
+        uint256 userEpoch = userPointEpoch[msg.sender];
+        userPointHistory[msg.sender][userEpoch] = Point({
+            bias: votingPower,
+            slope: votingPower / (_unlockTime - block.timestamp),
+            timestamp: block.timestamp
+        });
+
+        // Update global point history
+        epoch += 1;
+        pointHistory[epoch] = Point({
+            bias: totalSupply,
+            slope: pointHistory[epoch - 1].slope + (votingPower / (_unlockTime - block.timestamp)),
+            timestamp: block.timestamp
+        });
+
+        emit Deposit(msg.sender, _value, _unlockTime, block.timestamp);
+        emit Supply(prevSupply, totalSupply);
     }
     
     /**
@@ -187,51 +160,87 @@ contract ve8020 is Ownable, ReentrancyGuard {
      * @param _unlockTime New unlock time
      */
     function extendLockTime(uint256 _unlockTime) external nonReentrant {
-        LockedBalance storage userLocked = locked[msg.sender];
-        
-        uint256 unlockTime = (_unlockTime / WEEK) * WEEK; // Round down to whole weeks
-        require(unlockTime > userLocked.unlockTime, "Cannot decrease lock time");
-        require(unlockTime <= block.timestamp + MAX_LOCK_TIME, "Lock time too long");
-        require(userLocked.amount > 0, "No existing lock found");
-        require(userLocked.unlockTime > block.timestamp, "Lock expired");
-        
-        // Checkpoint with same amount but new unlock time
-        _checkpoint(msg.sender, userLocked, LockedBalance({
-            amount: userLocked.amount,
-            unlockTime: unlockTime
-        }));
-        
-        // Update user's lock
-        userLocked.unlockTime = unlockTime;
-        
-        emit Deposit(msg.sender, 0, unlockTime, block.timestamp);
+        LockedBalance storage userLock = locked[msg.sender];
+        require(userLock.amount > 0, "No existing lock found");
+        require(_unlockTime > userLock.unlockTime, "Cannot decrease lock time");
+        require(_unlockTime <= block.timestamp + MAX_LOCK_TIME, "Lock time too long");
+        require(_unlockTime >= block.timestamp + MIN_LOCK_TIME, "Lock time must be in the future");
+
+        // Calculate old voting power
+        uint256 oldVotingPower = calculateVotingPower(userLock.amount, userLock.unlockTime);
+
+        // Update unlock time
+        userLock.unlockTime = _unlockTime;
+
+        // Calculate new voting power
+        uint256 newVotingPower = calculateVotingPower(userLock.amount, _unlockTime);
+
+        // Update user point history
+        userPointEpoch[msg.sender] += 1;
+        uint256 userEpoch = userPointEpoch[msg.sender];
+        userPointHistory[msg.sender][userEpoch] = Point({
+            bias: newVotingPower,
+            slope: 0,
+            timestamp: block.timestamp
+        });
+
+        // Update total supply
+        totalSupply = totalSupply - oldVotingPower + newVotingPower;
+
+        // Update global point history
+        epoch += 1;
+        pointHistory[epoch] = Point({
+            bias: totalSupply,
+            slope: 0,
+            timestamp: block.timestamp
+        });
+
+        emit Deposit(msg.sender, userLock.amount, _unlockTime, block.timestamp);
     }
     
     /**
      * @dev Withdraw tokens once the lock has expired
      */
     function withdraw() external nonReentrant {
-        LockedBalance storage userLocked = locked[msg.sender];
-        
-        require(userLocked.amount > 0, "No lock found");
-        require(block.timestamp >= userLocked.unlockTime, "Lock not expired");
-        
-        uint256 value = userLocked.amount;
-        
-        // Checkpoint with zero balance
-        _checkpoint(msg.sender, userLocked, LockedBalance({
-            amount: 0,
-            unlockTime: 0
-        }));
-        
-        // Update user's lock
-        userLocked.amount = 0;
-        userLocked.unlockTime = 0;
-        
-        // Return LP tokens to the user
-        require(lpToken.transfer(msg.sender, value), "Transfer failed");
-        
-        emit Withdraw(msg.sender, value, block.timestamp);
+        LockedBalance storage userLock = locked[msg.sender];
+        require(userLock.amount > 0, "No lock found");
+        require(block.timestamp >= userLock.unlockTime, "Lock not expired");
+
+        // Save the amount to withdraw
+        uint256 amount = userLock.amount;
+
+        // Clear the lock before any external calls
+        userLock.amount = 0;
+        userLock.unlockTime = 0;
+
+        // Update total supply (voting power should already be 0 since lock expired)
+        uint256 oldVotingPower = calculateVotingPower(amount, userLock.unlockTime);
+        if (oldVotingPower > 0) {
+            totalSupply = totalSupply > oldVotingPower ? totalSupply - oldVotingPower : 0;
+        }
+
+        // Update user point history
+        userPointEpoch[msg.sender] += 1;
+        uint256 userEpoch = userPointEpoch[msg.sender];
+        userPointHistory[msg.sender][userEpoch] = Point({
+            bias: 0,
+            slope: 0,
+            timestamp: block.timestamp
+        });
+
+        // Update global point history
+        epoch += 1;
+        pointHistory[epoch] = Point({
+            bias: totalSupply,
+            slope: 0,
+            timestamp: block.timestamp
+        });
+
+        // Transfer tokens back to user
+        require(lpToken.transfer(msg.sender, amount), "Transfer failed");
+
+        emit Withdraw(msg.sender, amount, block.timestamp);
+        emit Supply(totalSupply + oldVotingPower, totalSupply);
     }
     
     /**
@@ -256,14 +265,17 @@ contract ve8020 is Ownable, ReentrancyGuard {
             return 0;
         }
         
-        uint256 lockDuration = _unlockTime - block.timestamp;
-        if (lockDuration > MAX_LOCK_TIME) {
-            lockDuration = MAX_LOCK_TIME;
+        uint256 timeDiff = _unlockTime - block.timestamp;
+        if (timeDiff > MAX_LOCK_TIME) {
+            timeDiff = MAX_LOCK_TIME;
         }
         
-        // Voting power = amount * (lockDuration / MAX_LOCK_TIME)
-        // This means max lock time = full voting power, shorter locks = proportionally less
-        return (_amount * lockDuration) / MAX_LOCK_TIME;
+        // Calculate voting power with improved precision
+        // Use 1e18 precision throughout the calculation
+        uint256 timeRatio = (timeDiff * 1e18) / MAX_LOCK_TIME;
+        uint256 votingPower = (_amount * timeRatio) / 1e18;
+        
+        return votingPower;
     }
     
     /**
@@ -284,19 +296,29 @@ contract ve8020 is Ownable, ReentrancyGuard {
         userPointEpoch[_user] += 1;
         uint256 userEpoch = userPointEpoch[_user];
         
-        // Calculate slope and bias
+        // Calculate slope and bias with improved precision
         uint256 oldSlope = 0;
         uint256 newSlope = 0;
         
         if (_oldLocked.unlockTime > block.timestamp) {
-            oldSlope = (_oldLocked.amount * MAX_LOCK_TIME) / (_oldLocked.unlockTime - block.timestamp);
+            uint256 timeDiff = _oldLocked.unlockTime - block.timestamp;
+            if (timeDiff > MAX_LOCK_TIME) {
+                timeDiff = MAX_LOCK_TIME;
+            }
+            // Calculate slope with 1e18 precision
+            oldSlope = (_oldLocked.amount * 1e18) / timeDiff;
         }
         
         if (_newLocked.unlockTime > block.timestamp) {
-            newSlope = (_newLocked.amount * MAX_LOCK_TIME) / (_newLocked.unlockTime - block.timestamp);
+            uint256 timeDiff = _newLocked.unlockTime - block.timestamp;
+            if (timeDiff > MAX_LOCK_TIME) {
+                timeDiff = MAX_LOCK_TIME;
+            }
+            // Calculate slope with 1e18 precision
+            newSlope = (_newLocked.amount * 1e18) / timeDiff;
         }
         
-        // Update user point history
+        // Update user point history with current timestamp
         userOldPoint.bias = oldPower;
         userOldPoint.slope = oldSlope;
         userOldPoint.timestamp = block.timestamp;
@@ -305,18 +327,21 @@ contract ve8020 is Ownable, ReentrancyGuard {
         userNewPoint.slope = newSlope;
         userNewPoint.timestamp = block.timestamp;
         
+        // Save user point history
         userPointHistory[_user][userEpoch] = userNewPoint;
         
         // Update global point history
         epoch += 1;
         
-        // Update global supply
+        // Update global supply with proper overflow checks
         uint256 prevSupply = totalSupply;
         totalSupply = prevSupply + newPower - oldPower;
         
+        // Update global point history with proper overflow checks
+        Point memory lastPoint = pointHistory[epoch - 1];
         pointHistory[epoch] = Point({
-            bias: pointHistory[epoch - 1].bias + newPower - oldPower,
-            slope: pointHistory[epoch - 1].slope + newSlope - oldSlope,
+            bias: lastPoint.bias + newPower - oldPower,
+            slope: lastPoint.slope + newSlope - oldSlope,
             timestamp: block.timestamp
         });
         

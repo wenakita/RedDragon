@@ -30,7 +30,8 @@ contract MockRedDragonLPBooster is IRedDragonLPBooster {
 
         // Simple boost calculation for testing:
         // 1x base boost + up to 1.5x additional boost based on LP balance
-        uint256 additionalBoost = (lpBalance * 150) / _lpToken.totalSupply();
+        uint256 additionalBoost = (lpBalance * 150) / MIN_LP_AMOUNT;
+        if (additionalBoost > 150) additionalBoost = 150; // Cap at 1.5x additional boost
         uint256 totalBoost = BASE_BOOST + additionalBoost;
 
         // Cap at MAX_BOOST
