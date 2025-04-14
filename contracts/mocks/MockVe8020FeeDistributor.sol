@@ -8,19 +8,15 @@ import "../interfaces/IVe8020FeeDistributor.sol";
  * @dev Mock implementation of IVe8020FeeDistributor
  */
 contract MockVe8020FeeDistributor is IVe8020FeeDistributor {
-    address public rewardToken;
-    uint256 public rewardAllocation;
-    uint256 public liquidityAllocation;
+    address public wrappedSonic;
 
     // Mock state
     uint256 public totalRewardsAdded;
     mapping(uint256 => bool) public epochHasRewards;
     mapping(uint256 => bool) public rewardsClaimed;
     
-    constructor(address _rewardToken) {
-        rewardToken = _rewardToken;
-        rewardAllocation = 8000; // 80%
-        liquidityAllocation = 2000; // 20%
+    constructor(address _wrappedSonic) {
+        wrappedSonic = _wrappedSonic;
     }
     
     /**
@@ -37,18 +33,6 @@ contract MockVe8020FeeDistributor is IVe8020FeeDistributor {
     function receiveRewards(uint256 _amount) external override {
         totalRewardsAdded += _amount;
         epochHasRewards[block.timestamp / 1 days] = true;
-    }
-    
-    /**
-     * @inheritdoc IVe8020FeeDistributor
-     */
-    function setFeeAllocation(
-        uint256 _rewardAllocation,
-        uint256 _liquidityAllocation
-    ) external override {
-        require(_rewardAllocation + _liquidityAllocation == 10000, "Must be 10000 basis points (100%)");
-        rewardAllocation = _rewardAllocation;
-        liquidityAllocation = _liquidityAllocation;
     }
     
     /**

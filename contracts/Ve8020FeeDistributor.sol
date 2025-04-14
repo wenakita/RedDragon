@@ -12,14 +12,14 @@ import "./ve8020.sol";
  * @title Ve8020FeeDistributor
  * @dev Contract that distributes transaction fees to ve(80/20) holders
  * proportional to their voting power. Users must claim their rewards manually.
+ * Now distributes wS (wrapped Sonic) tokens as rewards instead of DRAGON.
  */
 contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     // Core state variables
     ve8020 public veToken;
-    IERC20 public rewardToken; // DRAGON token
-    IERC20 public wrappedSonic; // sSonic Wrapper Token
+    IERC20 public wrappedSonic; // wS (Wrapped Sonic) Token - used for rewards
     
     // Mapping of user => epoch => claimed status
     mapping(address => mapping(uint256 => bool)) public userEpochClaimed;
@@ -49,20 +49,16 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
     /**
      * @dev Constructor
      * @param _veToken Address of the ve8020 token
-     * @param _rewardToken Address of the reward token (DRAGON)
-     * @param _wrappedSonic Address of the wrapped Sonic token
+     * @param _wrappedSonic Address of the wrapped Sonic token (used for rewards)
      */
     constructor(
         address _veToken, 
-        address _rewardToken,
         address _wrappedSonic
     ) {
         require(_veToken != address(0), "ve8020 address cannot be zero");
-        require(_rewardToken != address(0), "Reward token address cannot be zero");
         require(_wrappedSonic != address(0), "WrappedSonic address cannot be zero");
         
         veToken = ve8020(_veToken);
-        rewardToken = IERC20(_rewardToken);
         wrappedSonic = IERC20(_wrappedSonic);
         
         // Initialize first epoch
@@ -83,8 +79,8 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         // Check if epoch needs to be advanced
         checkAdvanceEpoch();
         
-        // Transfer reward tokens from caller to this contract
-        rewardToken.safeTransferFrom(msg.sender, address(this), _amount);
+        // Transfer wS tokens from caller to this contract
+        wrappedSonic.safeTransferFrom(msg.sender, address(this), _amount);
         
         // Update rewards for current epoch
         epochRewards[currentEpoch] += _amount;
@@ -145,7 +141,7 @@ contract Ve8020FeeDistributor is Ownable, ReentrancyGuard {
         require(rewardAmount > 0, "No rewards to claim");
         
         userEpochClaimed[msg.sender][_epoch] = true;
-        rewardToken.safeTransfer(msg.sender, rewardAmount);
+        wrappedSonic.safeTransfer(msg.sender, rewardAmount);
         
         emit RewardsClaimed(msg.sender, _epoch, rewardAmount);
     }

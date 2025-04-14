@@ -8,7 +8,6 @@ describe("Ve8020FeeDistributor", function () {
   let owner;
   let user1;
   let user2;
-  let rewardToken;
 
   beforeEach(async function () {
     [owner, user1, user2] = await ethers.getSigners();
@@ -23,15 +22,10 @@ describe("Ve8020FeeDistributor", function () {
     ve8020 = await Ve8020.deploy(wrappedSonic.address);
     await ve8020.deployed();
 
-    // Deploy mock reward token
-    rewardToken = await MockERC20.deploy("Dragon Token", "DRAGON", ethers.utils.parseEther("1000000"));
-    await rewardToken.deployed();
-
     // Deploy the fee distributor
     const Ve8020FeeDistributor = await ethers.getContractFactory("Ve8020FeeDistributor");
     ve8020FeeDistributor = await Ve8020FeeDistributor.deploy(
       ve8020.address,
-      rewardToken.address,
       wrappedSonic.address
     );
     await ve8020FeeDistributor.deployed();
@@ -45,7 +39,6 @@ describe("Ve8020FeeDistributor", function () {
     it("should initialize with correct values", async function() {
       expect(await ve8020FeeDistributor.wrappedSonic()).to.equal(wrappedSonic.address);
       expect(await ve8020FeeDistributor.veToken()).to.equal(ve8020.address);
-      expect(await ve8020FeeDistributor.rewardToken()).to.equal(rewardToken.address);
       expect(await ve8020FeeDistributor.currentEpoch()).to.equal(0);
     });
   });
@@ -65,7 +58,7 @@ describe("Ve8020FeeDistributor", function () {
       await ve8020.connect(user2).createLock(ethers.utils.parseEther("500"), unlockTime);
       
       // Add rewards
-      await rewardToken.approve(ve8020FeeDistributor.address, ethers.utils.parseEther("1000"));
+      await wrappedSonic.approve(ve8020FeeDistributor.address, ethers.utils.parseEther("1000"));
       await ve8020FeeDistributor.addRewards(ethers.utils.parseEther("1000"));
     });
 
@@ -78,9 +71,9 @@ describe("Ve8020FeeDistributor", function () {
       await ve8020FeeDistributor.checkAdvanceEpoch();
       
       // User1 claims rewards
-      const balanceBefore = await rewardToken.balanceOf(user1.address);
+      const balanceBefore = await wrappedSonic.balanceOf(user1.address);
       await ve8020FeeDistributor.connect(user1).claimRewards(0); // Claim for epoch 0
-      const balanceAfter = await rewardToken.balanceOf(user1.address);
+      const balanceAfter = await wrappedSonic.balanceOf(user1.address);
 
       expect(balanceAfter).to.be.gt(balanceBefore);
     });
@@ -114,8 +107,8 @@ describe("Ve8020FeeDistributor", function () {
       await ve8020FeeDistributor.connect(user1).claimRewards(0); // Claim for epoch 0
       await ve8020FeeDistributor.connect(user2).claimRewards(0); // Claim for epoch 0
 
-      const user1Balance = await rewardToken.balanceOf(user1.address);
-      const user2Balance = await rewardToken.balanceOf(user2.address);
+      const user1Balance = await wrappedSonic.balanceOf(user1.address);
+      const user2Balance = await wrappedSonic.balanceOf(user2.address);
 
       // User1 should get roughly twice the rewards as User2 (1000 vs 500 locked)
       expect(user1Balance).to.be.gt(user2Balance.mul(3).div(2)); // At least 1.5x more rewards

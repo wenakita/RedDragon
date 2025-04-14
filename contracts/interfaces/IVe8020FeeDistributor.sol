@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 /**
  * @title IVe8020FeeDistributor
- * @dev Interface for Ve8020FeeDistributor that handles rewards and liquidity
+ * @dev Interface for Ve8020FeeDistributor that distributes wS tokens to ve8020 holders
  */
 interface IVe8020FeeDistributor {
     /**
-     * @dev Add rewards for the current epoch and distribute between ve8020 holders and liquidity
+     * @dev Add rewards for the current epoch
      * @param _amount Amount of rewards to add
      */
     function addRewards(uint256 _amount) external;
@@ -17,16 +17,6 @@ interface IVe8020FeeDistributor {
      * @param _amount Amount of rewards received
      */
     function receiveRewards(uint256 _amount) external;
-    
-    /**
-     * @dev Set the allocation percentages for different purposes
-     * @param _rewardAllocation Percentage for ve8020 rewards (basis points)
-     * @param _liquidityAllocation Percentage for liquidity (basis points)
-     */
-    function setFeeAllocation(
-        uint256 _rewardAllocation,
-        uint256 _liquidityAllocation
-    ) external;
     
     /**
      * @dev Claims rewards for a specific epoch
