@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Ve8020FeeDistributor", function () {
+describe("ve8020FeeDistributor", function () {
   let ve8020FeeDistributor;
   let wrappedSonic;
   let ve8020;
@@ -23,7 +23,7 @@ describe("Ve8020FeeDistributor", function () {
     await ve8020.deployed();
 
     // Deploy the fee distributor
-    const Ve8020FeeDistributor = await ethers.getContractFactory("Ve8020FeeDistributor");
+    const Ve8020FeeDistributor = await ethers.getContractFactory("ve8020FeeDistributor");
     ve8020FeeDistributor = await Ve8020FeeDistributor.deploy(
       ve8020.address,
       wrappedSonic.address

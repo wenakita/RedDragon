@@ -144,8 +144,12 @@ describe("GoldScratcher", function () {
 
   describe("URI Management", function() {
     it("should set URI correctly", async function() {
-      const tokenId = await goldScratcher.mint(user1.address);
-      expect(await goldScratcher.tokenURI(tokenId)).to.include("unrevealed/");
+      await goldScratcher.mint(user1.address);
+      const tokenId = 1; // TokenId is 1 for the first mint
+      
+      // Get the token URI and check it contains the unrevealed folder
+      const uri = await goldScratcher.tokenURI(tokenId);
+      expect(uri).to.include("unrevealed/");
     });
   });
 
@@ -227,11 +231,12 @@ describe("GoldScratcher", function () {
 
   describe("Swap Application", function() {
     it("should apply scratcher to swap and boost if winner when called by owner", async function() {
-      const tokenId = await goldScratcher.mint(user1.address);
+      await goldScratcher.mint(user1.address);
+      const tokenId = 1;
       
       const swapAmount = ethers.utils.parseEther("100");
-      const tx = await goldScratcher.connect(owner).applyToSwap(tokenId, swapAmount);
-      const receipt = await tx.wait();
+      const result = await goldScratcher.connect(owner).applyToSwap(tokenId, swapAmount);
+      const receipt = await result.wait();
       
       const scratcherAppliedEvent = receipt.events.find(e => e.event === "ScratcherAppliedToSwap");
       expect(scratcherAppliedEvent).to.not.be.undefined;
@@ -240,21 +245,28 @@ describe("GoldScratcher", function () {
       const isWinner = scratcherAppliedEvent.args.isWinner;
       
       if (isWinner) {
-        expect(boostedAmount).to.be.closeTo(
-          swapAmount.mul(10690).div(10000),
-          ethers.utils.parseEther("0.01")
-        );
+        // If winner, amount should be boosted by 6.9%
+        const expectedBoostedAmount = swapAmount.mul(10690).div(10000);
+        expect(boostedAmount).to.equal(expectedBoostedAmount);
       } else {
+        // If not a winner, amount should remain the same
         expect(boostedAmount).to.equal(swapAmount);
       }
       
+      // Token should be burned
       await expect(goldScratcher.ownerOf(tokenId)).to.be.reverted;
     });
 
     it("should not allow non-owner/lottery to apply scratcher to swap", async function() {
-      const tokenId = await goldScratcher.mint(user1.address);
+      await goldScratcher.mint(user1.address);
+      const tokenId = 1;
       
       const swapAmount = ethers.utils.parseEther("100");
+      
+      // Set the lottery contract to enable authorization check
+      await goldScratcher.setLotteryContract(owner.address);
+      
+      // User1 should not be able to call applyToSwap
       await expect(
         goldScratcher.connect(user1).applyToSwap(tokenId, swapAmount)
       ).to.be.revertedWith("Only lottery or owner");

@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+
+/**
+ *   ==============================
+ *              ve8020
+ *   ==============================
+ *    Voting-Escrow Token Standard
+ *   ==============================
+ *
+ * // "Lee, this is America. We don't care about your 'rich cultural heritage'!" - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";

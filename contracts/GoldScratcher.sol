@@ -1,4 +1,19 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *                       
+ *        $$$$$$$$$$$$$$$$$$$
+ *      $$$$$$$$$$$$$$$$$$$$$$$$
+ *     $$$$$$$$$$$$$$$$$$$$$$$$$$$
+ *   $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+ *  $$$$$$$ GOLD SCRATCHER $$$$$$$$$
+ *  $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+ *
+ * // "Fifty million dollars?! Who do you think you kidnapped, Chelsea Clinton?" - James Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";

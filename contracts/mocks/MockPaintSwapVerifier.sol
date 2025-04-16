@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../interfaces/IRedDragonPaintSwapVerifier.sol";
+import "../interfaces/IDragonPaintSwapVRF.sol";
 import "../interfaces/IVRFConsumer.sol";
 
 /**
  * @title MockPaintSwapVerifier
  * @dev Simple mock verifier for testing
  */
-contract MockPaintSwapVerifier is IRedDragonPaintSwapVerifier {
+contract MockPaintSwapVerifier is IDragonPaintSwapVRF {
     bytes32 public lastRequestId;
     bool public vrfEnabled = true;
     mapping(bytes32 => uint256[]) public randomValues;
