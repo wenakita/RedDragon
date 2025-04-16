@@ -1,5 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+
+/**
+ *     ________________
+ *    |                |
+ *    |  PRICE ORACLE  |
+ *    |________________|
+ *
+ * // "I like my women like I like my rice... sticky!" - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";

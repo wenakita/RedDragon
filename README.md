@@ -1,229 +1,276 @@
-# RedDragon Token Ecosystem
+# Red Dragon Lottery Swap System
 
-This is the official repository for the RedDragon token ecosystem, featuring Balancer/Beets' ve8020 voting escrow system for rewarding holders, optimized fee distribution, and an innovative jackpot lottery mechanism that rewards active traders.
-
-## Table of Contents
-- [Overview](#overview)
-- [Core Contracts](#core-contracts)
-- [Key Features](#key-features)
-- [Architecture](#architecture)
-- [Fee Structure](#fee-structure)
-- [Recent Updates](#recent-updates)
-- [Technical Details](#technical-details)
-- [Development](#development)
-- [Deployment](#deployment)
-- [Security](#security)
-- [License](#license)
+This repository contains the Red Dragon Lottery Swap contracts, a comprehensive lottery system built for the Sonic blockchain.
 
 ## Overview
 
-The RedDragon token ecosystem creates a comprehensive DeFi platform with governance, rewards, and liquidity incentives. The system is built around the ve8020 (vote-escrowed) model, where users can lock their RedDragon tokens to gain voting power and earn fee rewards.
+The Red Dragon Lottery Swap system consolidates the functionality of multiple legacy lottery contracts into a single, efficient implementation. The system includes:
 
-## Core Contracts
+- **DragonLotterySwap**: The main abstract contract with all lottery functionality
+- **ConcreteDragonLotterySwap**: A concrete implementation for deployment
+- **GoldScratcher**: NFT implementation for jackpot boosts
+- **PromotionalItemRegistry**: Registry for promotions and additional boosts
 
-The ecosystem consists of these main components:
+## Deployment
 
-### Token Contracts
-- **RedDragon.sol**: The main ERC20 token with fee-on-transfer functionality
-- **ve8020.sol**: The voting escrow token for governance and rewards (lock RedDragon to receive)
-- **RedDragonThankYouTokenMulti.sol**: Multi-version thank you token for ecosystem participants
+There are two deployment scripts provided:
 
-### Fee Distribution & Rewards
-- **Ve8020FeeDistributor.sol**: Distributes rewards to ve8020 holders based on voting power
-- **RedDragonFeeManager.sol**: Manages fee collection and distribution across the ecosystem
-- **RedDragonJackpotVault.sol**: Holds and distributes jackpot rewards
+### Local Development Deployment
 
-### DEX Integration
-- **RedDragonBalancerIntegration.sol**: Integrates with Balancer/Beethoven X for liquidity
-- **RedDragonLPBooster.sol**: Provides boosted rewards for liquidity providers
-- **RedDragonVerifier.sol**: Verifies transactions and manages integrations
-
-### Governance
-- **RedDragonMultiSig.sol**: Multi-signature wallet for secure governance
-- **RedDragonTimelock.sol**: Timelock contract for governance actions
-
-### Oracle & Lottery
-- **PriceOracle.sol**: Price feed oracle for token valuation
-- **RedDragonSwapLottery.sol**: Lottery system using VRF for randomness
-- **ve8020LotteryIntegrator.sol**: Connects ve8020 system with the lottery
-
-## Key Features
-
-- **ve8020 Token System**: Lock RedDragon tokens to gain voting power and earn rewards
-- **Weekly Epoch Rewards**: Automatic distribution of rewards on a weekly basis
-- **Jackpot Lottery System**: Regular drawings with prize tiers that reward active traders
-- **Optimized for Gas**: Streamlined contracts with minimal overhead
-- **Governance Ready**: Voting power proportional to lock duration and amount
-- **VRF Integration**: Secure randomness for lottery and other features
-- **Balancer Integration**: Efficient liquidity management
-- **Batch Processing**: Efficient handling of large holder counts
-- **Storage Optimization**: Cleanup mechanisms for gas efficiency
-
-## Architecture
-
-The system follows a modular architecture:
-
-```
-RedDragon Token (ERC20)
-    |
-    ├── ve8020 (Voting Escrow)
-    |     |
-    |     └── Ve8020FeeDistributor (Weekly Rewards)
-    |
-    ├── RedDragonFeeManager
-    |     |
-    |     ├── Jackpot System (6.9%)
-    |     ├── ve8020 Rewards (2.41%)
-    |     └── Token Burn (0.69%)
-    |
-    ├── Balancer Integration
-    |     |
-    |     └── LP Booster
-    |
-    └── Governance
-          |
-          ├── MultiSig
-          └── Timelock
-```
-
-## Fee Structure
-
-The RedDragon token implements a 10% fee on transactions, distributed as follows:
-
-- **6.9%** - Jackpot system: Rewards distributed through the lottery system
-- **2.41%** - ve8020 Fee Distributor: Rewards for token holders who lock in the governance system
-- **0.69%** - Token burn: Permanently removed from circulation, increasing scarcity
-
-This structure ensures:
-- Long-term holders are rewarded through the ve8020 system
-- Users are incentivized to participate in the ecosystem
-- Deflationary tokenomics through regular burns
-
-## Recent Updates
-
-We've significantly optimized the codebase by:
-
-1. **Removing Budget Management**: All fees now go directly to ve8020 holders (100%)
-2. **Removing Unused Vaults**: Simplified architecture with no development vault
-3. **Eliminating Deprecated Code**: Completely removed deprecated interfaces and contracts
-4. **Streamlining Core Contracts**: Focused on essential functionality only
-5. **Optimizing Gas Usage**: Improved storage and execution efficiency
-6. **VRF Standardization**: Improved randomness implementation
-
-## Technical Details
-
-### Ve8020 System
-
-The ve8020 system is inspired by Curve's vote-escrowed model:
-- Users lock RedDragon tokens for periods up to 4 years
-- Voting power is proportional to tokens locked and lock duration
-- Weekly fee distributions based on voting power
-- Lock extensions and early exit penalties
-
-### Fee Distributor
-
-The Ve8020FeeDistributor:
-- Operates on weekly epochs
-- Takes snapshots of voting power at epoch boundaries
-- Distributes rewards proportionally to voting power
-- Supports batch processing for gas efficiency
-- Includes storage cleanup mechanisms
-
-### Jackpot System
-
-The RedDragon jackpot system is a core feature of the ecosystem:
-- Receives 6.9% of all transaction fees
-- Lottery draws occur at regular intervals
-- Uses verifiable random functions (VRF) for transparent, tamper-proof draws
-- Entry tickets are awarded based on trading activity
-- Active traders receive more chances to win proportional to their individual trade sizes
-- Multiple prize tiers with different reward amounts
-- Prize values range from 100 wS to 10000 wS
-- Ability to switch to USD-denominated prizes if $S price exceeds $1
-- Auto-compounding pot that grows between draws
-- Special jackpot events tied to trading volume milestones
-- Emergency recovery mechanisms for technical issues
-
-### VRF Implementation
-
-The system uses PaintSwap's VRF service for secure randomness:
-- Standardized through the `IVRFConsumer` interface
-- Used for lottery draws and other random outcomes
-- Includes circuit breakers and security measures
-
-See the [VRF Implementation Guide](VRF_IMPLEMENTATION_GUIDE.md) for more details.
-
-### Balancer Integration
-
-The RedDragonBalancerIntegration contract:
-- Creates and manages Balancer/Beethoven X pools
-- Handles token swaps and liquidity provision
-- Integrates with the LP Booster for enhanced rewards
-
-## Development
-
-### Prerequisites
-
-- Node.js v14+
-- npm or yarn
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/reddragon-token.git
-cd reddragon-token
-
-# Install dependencies
-npm install
-```
-
-### Testing
-
-```bash
-# Run all tests
-npx hardhat test
-
-# Run specific test
-npx hardhat test test/Ve8020FeeDistributor.test.js
-```
-
-### Local Development
+To deploy to a local Hardhat node for testing:
 
 ```bash
 # Start a local Hardhat node
 npx hardhat node
 
-# Deploy to local network
-npx hardhat run scripts/deploy.js --network localhost
+# In a separate terminal, deploy the contracts
+npx hardhat run scripts/deploy_concrete_lottery_swap.js --network localhost
+
+# Interact with the deployed contracts
+npx hardhat run scripts/interact_lottery_swap.js --network localhost
 ```
 
-## Deployment
+### Sonic Network Deployment
 
-### Mainnet Deployment
+To deploy to the Sonic mainnet:
+
+1. Set up environment variables:
 
 ```bash
-# Deploy to mainnet (requires .env configuration)
-npx hardhat run scripts/deploy.js --network mainnet
+# Create or edit .env file
+SONIC_MAINNET_RPC_URL=https://rpc.soniclabs.com
+PRIVATE_KEY=your_private_key_here
+WRAPPED_SONIC_ADDRESS=0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38
 ```
 
-### Contract Verification
+2. Deploy the contracts:
 
 ```bash
-# Verify contract on Etherscan
-npx hardhat verify --network mainnet DEPLOYED_CONTRACT_ADDRESS "Constructor Arg 1" "Constructor Arg 2"
+npx hardhat run scripts/deploy_sonic_network.js --network sonic
 ```
 
-## Security
+3. Verify the contracts on SonicScan using the commands that will be displayed after deployment.
 
-The contracts implement several security measures:
+## Contract Interactions
 
-- **MultiSig Governance**: Critical actions require multiple signatures
-- **Timelock Delays**: Important parameter changes have mandatory waiting periods
-- **Emergency Withdrawals**: Escape hatches for emergency situations
-- **Access Control**: Strict permission systems for sensitive functions
-- **Reentrancy Guards**: Protection against reentrancy attacks
+### Basic Usage
+
+1. **Adding to the Jackpot**:
+   ```javascript
+   await lottery.addToJackpot(ethers.utils.parseEther("100"));
+   ```
+
+2. **Processing a Buy**:
+   ```javascript
+   await lottery.processBuy(userAddress, ethers.utils.parseEther("5"));
+   ```
+
+3. **Getting Lottery Stats**:
+   ```javascript
+   const stats = await lottery.getStats();
+   console.log(`Total Winners: ${stats.winners}`);
+   console.log(`Total Payouts: ${ethers.utils.formatEther(stats.payouts)} wSONIC`);
+   console.log(`Current Jackpot: ${ethers.utils.formatEther(stats.current)} wSONIC`);
+   ```
+
+4. **Using GoldScratcher**:
+   ```javascript
+   // Mint a scratcher to a user
+   await goldScratcher.mint(userAddress);
+   
+   // Apply the scratcher to a swap for bonus
+   await goldScratcher.applyToSwap(tokenId, swapAmount);
+   ```
+
+## Configuration
+
+After deployment, configure the lottery parameters:
+
+1. **Set Entry Limits**:
+   ```javascript
+   // Min: 1 wSONIC, Max: 10,000 wSONIC
+   await lottery.setEntryLimits(
+     ethers.utils.parseEther("1"),
+     ethers.utils.parseEther("10000")
+   );
+   ```
+
+2. **Set Win Chance**:
+   ```javascript
+   // Base: 0.04%, Max: 4% (expressed in basis points)
+   await lottery.setWinChance(4, 400);
+   ```
+
+3. **Set Exchange Pair** (for detecting buys/sells):
+   ```javascript
+   await lottery.setExchangePair(exchangePairAddress);
+   ```
 
 ## License
 
-MIT 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Deployment Process
+
+### Prerequisites
+
+1. Ensure you have Node.js and npm installed
+2. Configure your `.env` file with:
+   - Private key or mnemonic for deployment
+   - Network configurations (for Sonic mainnet)
+   - Addresses for required external contracts (e.g., WRAPPED_SONIC_ADDRESS)
+
+### Steps to Deploy
+
+1. Install dependencies:
+   ```
+   npm install
+   ```
+
+2. Compile the contracts:
+   ```
+   npx hardhat compile
+   ```
+
+3. Deploy all contracts at once:
+   ```
+   npx hardhat run scripts/deploy-all.js --network sonic
+   ```
+   
+   This script will:
+   - Deploy all necessary contracts in the correct order
+   - Configure relationships between contracts
+   - Set up ve8020 address in the Dragon token
+   - Display all contract addresses at the end
+   - Authorize 0x934B0AB5B32d73cF99b618e6f31eB2e4E976f741 as a verifier
+
+4. After deployment, update your `.env` file with the new contract addresses shown in the output.
+
+5. Verify all contracts on SonicScan:
+   ```
+   npx hardhat run scripts/verify-all.js --network sonic
+   ```
+
+## Contract Verification
+
+SonicScan has a daily limit of 250 source code submissions. Due to this limitation, not all contracts may be verified in a single day.
+
+### Using the Scheduled Verification Script
+
+We've created a scheduled verification script that tracks verification status and retries failed verifications:
+
+```bash
+# Verify all unverified contracts
+npx hardhat run scripts/scheduled-verify.js --network sonic
+
+# Verify a specific contract
+npx hardhat run scripts/scheduled-verify.js --network sonic Dragon
+```
+
+The script creates a `verification-status.json` file that tracks which contracts have been verified and how many attempts have been made. It will:
+
+- Skip already verified contracts
+- Retry transient failures
+- Stop when it detects the daily limit has been reached
+- Provide a summary of verification status
+
+### Manual Verification
+
+For manual verification using Hardhat:
+
+```bash
+# Verify all contracts
+npx hardhat verify-all --network sonic
+
+# Verify a specific contract (example for Dragon)
+npx hardhat verify --network sonic 0xFb1e86A52c92E3Fa8F78d1e2c3c86c3B81E842d2 "0x4820Fe23828FfF58904bBfca6292ba196DB5EBF4" "0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38" "0x000000000000000000000000000000000000dEaD" "0xd55745c964197CCe954F0DcFcFA9c873fA4638Fb"
+```
+
+## Deployed Contracts
+
+After successful deployment, the following contracts will be available:
+
+| Contract | Description |
+|----------|-------------|
+| MockPaintSwapVerifier | Verification service for random number generation |
+| PromotionalItemRegistry | Registry for promotional items that can provide boosts |
+| GoldScratcher | Scratcher system for jackpot boosts |
+| ConcreteDragonLotterySwap | Main lottery system |
+| Dragon | The Dragon token |
+| ve8020 | Voting escrow token |
+| PriceOracle | Price oracle for USD-based entries |
+
+## Scripts
+
+- `scripts/deploy-all.js` - Deploys all contracts in the correct sequence
+- `scripts/verify-all.js` - Verifies all contracts on SonicScan
+- `scripts/add-contract-verifier.js` - Adds an address as an authorized verifier
+- `scripts/add-lottery-authority.js` - Adds an address as an authorized lottery operator
+
+## Architecture
+
+The Red Dragon ecosystem consists of several interconnected contracts:
+
+1. **Dragon Token** - The core token of the ecosystem
+2. **ve8020** - Voting escrow token for Dragon
+3. **DragonLotterySwap** - The consolidated lottery mechanism
+4. **Gold Scratcher** - NFT-based system for boosting jackpot odds
+5. **PromotionalItemRegistry** - Registry for promotional items
+
+The system allows users to participate in the lottery with varying win chances based on their voting power, LP stakes, and promotional items.
+
+# Red Dragon Protocol - Sonic Network Deployment
+
+## Deployed Contracts
+
+| Contract Name | Address | Verification Status |
+|---------------|---------|---------------------|
+| MockPaintSwapVerifier | 0xC885900cab96Edc0E22A14C0CFc460D5f9cc54E1 | Pending |
+| PromotionalItemRegistry | 0x0F158442C2b9dacE62ab06843aF2655A18f8A0aE | Pending |
+| GoldScratcher | 0x0742049D8Df65ff988FF150C3369035ede53821F | Pending |
+| ConcreteDragonLotterySwap | 0x4820Fe23828FfF58904bBfca6292ba196DB5EBF4 | Pending |
+| Dragon | 0xFb1e86A52c92E3Fa8F78d1e2c3c86c3B81E842d2 | Pending |
+| ve8020 | 0xd55745c964197CCe954F0DcFcFA9c873fA4638Fb | Pending |
+
+## Verification Instructions
+
+SonicScan has a daily limit of 250 source code submissions. If you encounter the error "Daily limit of 250 source code submissions reached", try again the next day.
+
+### Verification Script
+
+Use the following command to verify contracts:
+
+```bash
+npx hardhat run scripts/direct-verify.js --network sonic
+```
+
+To verify a specific contract:
+
+```bash
+npx hardhat run scripts/direct-verify.js --network sonic YourContractName
+```
+
+## Contract Parameters
+
+### GoldScratcher
+- Name: Red Dragon Gold Scratcher
+- Symbol: RDGS
+- Base URI: https://api.reddragon.sonic/metadata/
+- Unrevealed URI: unrevealed/
+- Winner URI: winner/
+- Loser URI: loser/
+
+### ConcreteDragonLotterySwap
+- WRAPPED_SONIC_ADDRESS: 0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38
+- PAINTSWAP_VERIFIER_ADDRESS: 0xC885900cab96Edc0E22A14C0CFc460D5f9cc54E1
+- PROMOTIONAL_ITEM_REGISTRY_ADDRESS: 0x0F158442C2b9dacE62ab06843aF2655A18f8A0aE
+- GOLD_SCRATCHER_ADDRESS: 0x0742049D8Df65ff988FF150C3369035ede53821F
+
+### Dragon
+- LOTTERY_ADDRESS: 0x4820Fe23828FfF58904bBfca6292ba196DB5EBF4
+- WRAPPED_SONIC_ADDRESS: 0x78266EAb20Ff1483a926F183B3E5A6C84f87D54c
+- BURN_ADDRESS: 0x000000000000000000000000000000000000dEaD
+- WRAPPED_SONIC_ADDRESS: 0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38
+
+### ve8020
+- DRAGON_ADDRESS: 0xFb1e86A52c92E3Fa8F78d1e2c3c86c3B81E842d2 

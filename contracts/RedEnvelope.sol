@@ -45,7 +45,8 @@ contract RedEnvelope is ERC721, ERC721Enumerable, Ownable, ReentrancyGuard {
     address[] public specialRecipients = [
         0x3291B1aE6B74d59a4334bBA0257873Dda5d18115,
         0xD2AfB6Acb56f35AFB861114c74703c53Fe6217bd,
-        0x7e021Ec4c9aaaA433402683B4faFc0699179796b
+        0x7e021Ec4c9aaaA433402683B4faFc0699179796b,
+        0x9D59D329Cf88f58a6d7E8860Db3f72b287a74471
     ];
     
     // Events

@@ -1,10 +1,10 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("RedDragonJackpotVault", function () {
+describe("DragonJackpotVault", function () {
   let jackpotVault;
   let wrappedSonic;
-  let redDragonToken;
+  let dragonToken;
   let lottery;
   let owner;
   let user1;
@@ -18,21 +18,21 @@ describe("RedDragonJackpotVault", function () {
     wrappedSonic = await MockERC20.deploy("Wrapped Sonic", "wS", ethers.utils.parseEther("1000000"));
     await wrappedSonic.deployed();
 
-    redDragonToken = await MockERC20.deploy("RedDragon Token", "DRAGON", ethers.utils.parseEther("1000000"));
-    await redDragonToken.deployed();
+    dragonToken = await MockERC20.deploy("Dragon Token", "DRAGON", ethers.utils.parseEther("1000000"));
+    await dragonToken.deployed();
 
     // Deploy mock lottery
-    const MockRedDragonSwapLottery = await ethers.getContractFactory("MockRedDragonSwapLottery");
-    lottery = await MockRedDragonSwapLottery.deploy(wrappedSonic.address, ethers.constants.AddressZero);
+    const MockERC20ForLottery = await ethers.getContractFactory("MockERC20");
+    lottery = await MockERC20ForLottery.deploy("Mock Lottery", "LOTTERY", ethers.utils.parseEther("1000000"));
     await lottery.deployed();
 
     // Deploy jackpot vault
-    const RedDragonJackpotVault = await ethers.getContractFactory("RedDragonJackpotVault");
-    jackpotVault = await RedDragonJackpotVault.deploy(wrappedSonic.address, multisig.address);
+    const DragonJackpotVault = await ethers.getContractFactory("DragonJackpotVault");
+    jackpotVault = await DragonJackpotVault.deploy(wrappedSonic.address, multisig.address);
     await jackpotVault.deployed();
 
     // Set token and forward addresses
-    await jackpotVault.connect(multisig).setTokenAddress(redDragonToken.address);
+    await jackpotVault.connect(multisig).setTokenAddress(dragonToken.address);
     await jackpotVault.connect(multisig).setForwardAddress(lottery.address);
 
     // Transfer some wS to the vault
@@ -42,7 +42,7 @@ describe("RedDragonJackpotVault", function () {
   describe("Initialization", function() {
     it("should initialize with correct values", async function() {
       expect(await jackpotVault.wrappedSonic()).to.equal(wrappedSonic.address);
-      expect(await jackpotVault.redDragonToken()).to.equal(redDragonToken.address);
+      expect(await jackpotVault.dragonToken()).to.equal(dragonToken.address);
       expect(await jackpotVault.forwardAddress()).to.equal(lottery.address);
       expect(await jackpotVault.owner()).to.equal(multisig.address);
       
@@ -106,7 +106,7 @@ describe("RedDragonJackpotVault", function () {
       
       await jackpotVault.connect(multisig).setTokenAddress(newToken.address);
       
-      expect(await jackpotVault.redDragonToken()).to.equal(newToken.address);
+      expect(await jackpotVault.dragonToken()).to.equal(newToken.address);
     });
     
     it("should not allow non-owner to set token address", async function() {

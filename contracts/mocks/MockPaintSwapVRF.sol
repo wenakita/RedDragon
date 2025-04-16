@@ -2,13 +2,13 @@
 pragma solidity ^0.8.20;
 
 import "../interfaces/IVRFConsumer.sol";
-import "../interfaces/IRedDragonPaintSwapVerifier.sol";
+import "../interfaces/IDragonPaintSwapVRF.sol";
 
 /**
  * @title MockPaintSwapVRF
  * @dev A mock implementation of PaintSwap's VRF for testing
  */
-contract MockPaintSwapVRF is IRedDragonPaintSwapVerifier {
+contract MockPaintSwapVRF is IDragonPaintSwapVRF {
     // Mapping to store callback contracts for each request
     mapping(bytes32 => address) public callbacks;
     mapping(bytes32 => uint256[]) public randomValues;

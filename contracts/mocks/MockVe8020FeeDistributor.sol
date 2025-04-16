@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../interfaces/IVe8020FeeDistributor.sol";
+import "../interfaces/Ive8020FeeDistributor.sol";
 
 /**
  * @title MockVe8020FeeDistributor
- * @dev Mock implementation of IVe8020FeeDistributor
+ * @dev Mock implementation of Ive8020FeeDistributor
  */
-contract MockVe8020FeeDistributor is IVe8020FeeDistributor {
+contract MockVe8020FeeDistributor is Ive8020FeeDistributor {
     address public wrappedSonic;
 
     // Mock state
@@ -20,26 +20,27 @@ contract MockVe8020FeeDistributor is IVe8020FeeDistributor {
     }
     
     /**
-     * @inheritdoc IVe8020FeeDistributor
+     * @inheritdoc Ive8020FeeDistributor
      */
-    function addRewards(uint256 _amount) external override {
-        totalRewardsAdded += _amount;
+    function addRewards(uint256 amount) external override {
+        totalRewardsAdded += amount;
         epochHasRewards[block.timestamp / 1 days] = true;
+        emit RewardsAdded(amount);
     }
     
     /**
-     * @inheritdoc IVe8020FeeDistributor
+     * @inheritdoc Ive8020FeeDistributor
      */
-    function receiveRewards(uint256 _amount) external override {
-        totalRewardsAdded += _amount;
-        epochHasRewards[block.timestamp / 1 days] = true;
+    function claimRewards(uint256 epoch) external override {
+        require(epochHasRewards[epoch], "No rewards for this epoch");
+        rewardsClaimed[epoch] = true;
+        emit RewardsClaimed(msg.sender, epoch, 0);
     }
     
     /**
-     * @inheritdoc IVe8020FeeDistributor
+     * @inheritdoc Ive8020FeeDistributor
      */
-    function claimRewards(uint256 _epoch) external override {
-        require(epochHasRewards[_epoch], "No rewards for this epoch");
-        rewardsClaimed[_epoch] = true;
+    function getUserRewards(address user, uint256 epoch) external view override returns (uint256) {
+        return 0;
     }
 } 

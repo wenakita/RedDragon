@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+
+/**
+ *   =============================
+ *   | PROMOTIONAL ITEM REGISTRY |
+ *   =============================
+ *   | For Managing Boost Items  |
+ *   =============================
+ *
+ * // "I'll slap you so hard you'll end up in the Ming Dynasty." - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IPromotionalItem.sol";
