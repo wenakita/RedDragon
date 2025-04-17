@@ -59,6 +59,13 @@ interface IDragonLotterySwap {
      */
     function calculateWinChance(address user, uint256 wsAmount) external view returns (uint256);
     
+    /**
+     * @dev Enter the lottery on behalf of a user
+     * @param user User address to enter the lottery for
+     * @param tickets Number of tickets to purchase
+     */
+    function enterLotteryFor(address user, uint256 tickets) external;
+    
     function getCurrentJackpot() external view returns (uint256);
     function getStats() external view returns (uint256 winners, uint256 payouts, uint256 current);
     function getSwapLimits() external view returns (uint256 min, uint256 max, bool isUsdMode);
