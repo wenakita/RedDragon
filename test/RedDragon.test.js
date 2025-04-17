@@ -9,7 +9,7 @@ describe("Dragon", function () {
   let user2;
   let user3;
   let jackpotAddress;
-  let ve8020Address;
+  let ve69LPAddress;
   let burnAddress;
   let exchangePair;
 
@@ -17,7 +17,7 @@ describe("Dragon", function () {
   const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
   beforeEach(async function () {
-    [owner, user1, user2, user3, jackpotAddress, ve8020Address, exchangePair] = await ethers.getSigners();
+    [owner, user1, user2, user3, jackpotAddress, ve69LPAddress, exchangePair] = await ethers.getSigners();
     burnAddress = BURN_ADDRESS;
 
     // Deploy mock tokens
@@ -29,7 +29,7 @@ describe("Dragon", function () {
     const Dragon = await ethers.getContractFactory("Dragon");
     dragon = await Dragon.deploy(
       jackpotAddress.address,
-      ve8020Address.address,
+      ve69LPAddress.address,
       burnAddress,
       wrappedSonic.address
     );
@@ -52,7 +52,7 @@ describe("Dragon", function () {
       expect(await dragon.totalSupply()).to.equal(INITIAL_SUPPLY);
       expect(await dragon.balanceOf(owner.address)).to.equal(INITIAL_SUPPLY);
       expect(await dragon.jackpotAddress()).to.equal(jackpotAddress.address);
-      expect(await dragon.ve8020Address()).to.equal(ve8020Address.address);
+      expect(await dragon.ve69LPAddress()).to.equal(ve69LPAddress.address);
       expect(await dragon.burnAddress()).to.equal(burnAddress);
       expect(await dragon.wrappedSonicAddress()).to.equal(wrappedSonic.address);
       expect(await dragon.exchangePair()).to.equal(exchangePair.address);
@@ -63,7 +63,7 @@ describe("Dragon", function () {
     it.skip("should initialize with correct fee structure", async function() {
       expect(await dragon.jackpotFee()).to.equal(69);
       expect(await dragon.burnFee()).to.equal(69);
-      expect(await dragon.ve8020Fee()).to.equal(241);
+      expect(await dragon.ve69LPFee()).to.equal(241);
       expect(await dragon.totalFee()).to.equal(379);
     });
   });
@@ -85,7 +85,7 @@ describe("Dragon", function () {
       // Get initial balances
       const initialJackpotBalance = await dragon.balanceOf(jackpotAddress.address);
       const initialBurnBalance = await dragon.balanceOf(burnAddress);
-      const initialVeBalance = await dragon.balanceOf(ve8020Address.address);
+      const initialVeBalance = await dragon.balanceOf(ve69LPAddress.address);
       
       // Perform transfer
       await dragon.connect(user1).transfer(user2.address, transferAmount);
@@ -97,7 +97,7 @@ describe("Dragon", function () {
       // Check fee distribution
       const jackpotBalance = await dragon.balanceOf(jackpotAddress.address);
       const burnBalance = await dragon.balanceOf(burnAddress);
-      const veBalance = await dragon.balanceOf(ve8020Address.address);
+      const veBalance = await dragon.balanceOf(ve69LPAddress.address);
       
       expect(jackpotBalance).to.equal(initialJackpotBalance.add(jackpotFee));
       expect(burnBalance).to.equal(initialBurnBalance.add(burnFee));
@@ -150,22 +150,23 @@ describe("Dragon", function () {
       expect(await dragon.jackpotAddress()).to.equal(newJackpotAddress);
     });
     
-    it("should allow owner to update ve8020 address", async function() {
-      const newVe8020Address = user2.address;
+    it("should allow owner to update ve69LP address", async function() {
+      const newVe69LPAddress = user2.address;
+      const newVe69LPFee = 200;
       const adminActionDelay = await dragon.ADMIN_ACTION_DELAY();
       
       // Schedule the change
-      await dragon.scheduleVe8020AddressUpdate(newVe8020Address);
+      await dragon.scheduleVe69LPAddressUpdate(newVe69LPAddress);
       
       // Fast-forward time to pass the timelock period with extra buffer
       await ethers.provider.send("evm_increaseTime", [adminActionDelay.toNumber() + 3600]); // Add 1 hour buffer
       await ethers.provider.send("evm_mine");
       
       // Execute the change
-      await dragon.executeVe8020AddressUpdate(newVe8020Address);
+      await dragon.executeVe69LPAddressUpdate(newVe69LPAddress);
       
       // Verify the change
-      expect(await dragon.ve8020Address()).to.equal(newVe8020Address);
+      expect(await dragon.ve69LPAddress()).to.equal(newVe69LPAddress);
     });
     
     it("should allow owner to set fee exemptions", async function() {
@@ -204,34 +205,34 @@ describe("Dragon", function () {
     it("should allow updating fee structure with timelock", async function() {
       const newJackpotFee = 500;
       const newBurnFee = 100;
-      const newVe8020Fee = 200;
+      const newVe69LPFee = 200;
       const adminActionDelay = await dragon.ADMIN_ACTION_DELAY();
       
       // Schedule the change
-      await dragon.scheduleFeeUpdate(newJackpotFee, newBurnFee, newVe8020Fee);
+      await dragon.scheduleFeeUpdate(newJackpotFee, newBurnFee, newVe69LPFee);
       
       // Fast-forward time to pass the timelock period with extra buffer
       await ethers.provider.send("evm_increaseTime", [adminActionDelay.toNumber() + 3600]); // Add 1 hour buffer
       await ethers.provider.send("evm_mine");
       
       // Execute the change
-      await dragon.executeFeeUpdate(newJackpotFee, newBurnFee, newVe8020Fee);
+      await dragon.executeFeeUpdate(newJackpotFee, newBurnFee, newVe69LPFee);
       
       // Verify the changes
       expect(await dragon.jackpotFee()).to.equal(newJackpotFee);
       expect(await dragon.burnFee()).to.equal(newBurnFee);
-      expect(await dragon.ve8020Fee()).to.equal(newVe8020Fee);
-      expect(await dragon.totalFee()).to.equal(newJackpotFee + newBurnFee + newVe8020Fee);
+      expect(await dragon.ve69LPFee()).to.equal(newVe69LPFee);
+      expect(await dragon.totalFee()).to.equal(newJackpotFee + newBurnFee + newVe69LPFee);
     });
     
     it("should prevent fee updates that exceed the total fee cap", async function() {
       const newJackpotFee = 800;
       const newBurnFee = 100;
-      const newVe8020Fee = 200;
+      const newVe69LPFee = 200;
       
       // Total fee would be 1100 (11%), which exceeds the 10% cap
       await expect(
-        dragon.scheduleFeeUpdate(newJackpotFee, newBurnFee, newVe8020Fee)
+        dragon.scheduleFeeUpdate(newJackpotFee, newBurnFee, newVe69LPFee)
       ).to.be.revertedWith("Total fee cannot exceed 10%");
     });
   });

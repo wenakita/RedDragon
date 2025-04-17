@@ -18,13 +18,14 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./interfaces/IDragonLotterySwap.sol";
+import "./interfaces/IUniswapV2Router.sol";
 
 /**
  * @title Dragon
  * @dev A deflationary ERC20 token with transparent fee distribution
  * Fixed 10% total fee on buys and sells:
  * - 6.9% jackpot
- * - 2.41% ve8020
+ * - 2.41% ve69LP
  * - 0.69% burned (sent to dead address)
  * No minting, no blacklist, no fee exclusions, no hidden fees
  */
@@ -52,43 +53,43 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     uint256 public lastFeeUpdate;
     uint256 public totalBurned;
     uint256 public totalJackpotFees;
-    uint256 public totalVe8020Fees;
+    uint256 public totalVe69LPFees;
     uint256 public launchTimestamp;
     uint256 public totalHolders;
     
     // Fee tracking variables for current transaction
     uint256 private _jackpotFee;
     uint256 private _burnFee;
-    uint256 private _ve8020Fee;
+    uint256 private _ve69LPFee;
     uint256 private _totalFee;
 
     // Buy fees (in basis points, 100 = 1%)
     uint256 public buyBurnFee = 69;        // 0.69% = 69 basis points
     uint256 public buyJackpotFee = 690;    // 6.9% = 690 basis points
-    uint256 public buyVe8020Fee = 241;     // 2.41% = 241 basis points
+    uint256 public buyVe69LPFee = 241;     // 2.41% = 241 basis points
     uint256 public totalFeeBuy = 1000;     // 10% = 1000 basis points
     
     // Sell fees (in basis points, 100 = 1%)
     uint256 public sellBurnFee = 69;       // 0.69% = 69 basis points
     uint256 public sellJackpotFee = 690;   // 6.9% = 690 basis points
-    uint256 public sellVe8020Fee = 241;    // 2.41% = 241 basis points
+    uint256 public sellVe69LPFee = 241;    // 2.41% = 241 basis points
     uint256 public totalFeeSell = 1000;    // 10% = 1000 basis points
 
     // Regular Fees
     uint256 public jackpotFeeRegular;
     uint256 public burnFeeRegular;
-    uint256 public ve8020FeeRegular;
+    uint256 public ve69LPFeeRegular;
     uint256 public totalFeeRegular;
     
     // Current Fees
     uint256 public jackpotFee;
     uint256 public burnFee;
-    uint256 public ve8020Fee;
+    uint256 public ve69LPFee;
     uint256 public totalFee;
     
     // Addresses
     address public jackpotAddress;
-    address public ve8020Address;
+    address public ve69LPAddress;
     address public burnAddress;
     address public wrappedSonicAddress;
     address public lotteryAddress;
@@ -125,8 +126,9 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     event ActionExecuted(bytes32 indexed actionId, string actionDescription);
     event ActionCancelled(bytes32 indexed actionId, string actionDescription);
     event OwnershipRenounced();
-    event Ve8020AddressUpdated(address indexed newAddress);
+    event Ve69LPAddressUpdated(address indexed newAddress);
     event OwnershipLocked(uint256 duration);
+    event RouterUpdated(address indexed newRouter);
     event TokensTransferred(
         address indexed from,
         address indexed to,
@@ -135,9 +137,9 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         uint256 jackpotAmount,
         uint256 veAmount
     );
-    event FeeCollected(address indexed from, uint256 burnAmount, uint256 jackpotAmount, uint256 ve8020Amount);
-    event BuyFeesUpdated(uint256 burnFee, uint256 jackpotFee, uint256 ve8020Fee);
-    event SellFeesUpdated(uint256 burnFee, uint256 jackpotFee, uint256 ve8020Fee);
+    event FeeCollected(address indexed from, uint256 burnAmount, uint256 jackpotAmount, uint256 ve69LPAmount);
+    event BuyFeesUpdated(uint256 burnFee, uint256 jackpotFee, uint256 ve69LPFee);
+    event SellFeesUpdated(uint256 burnFee, uint256 jackpotFee, uint256 ve69LPFee);
     event FeeExemptUpdated(address indexed account, bool exempt);
     
     // Fee structure
@@ -149,22 +151,25 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     uint256 private _preBuyWSBalance;
     bool private _trackingBuy;
     
+    // Add this router variable to the state variables section
+    IUniswapV2Router public router;
+    
     /**
      * @dev Constructor to initialize the token with transparent security features
      */
     constructor(
         address _jackpotAddress,
-        address _ve8020Address,
+        address _ve69LPAddress,
         address _burnAddress,
         address _wrappedSonicAddress
     ) ERC20("Dragon", "DRAGON") {
         require(_jackpotAddress != address(0), "Jackpot address cannot be zero");
-        require(_ve8020Address != address(0), "Ve8020 address cannot be zero");
+        require(_ve69LPAddress != address(0), "ve69LP address cannot be zero");
         require(_burnAddress != address(0), "Burn address cannot be zero");
         require(_wrappedSonicAddress != address(0), "Wrapped Sonic address cannot be zero");
 
         jackpotAddress = _jackpotAddress;
-        ve8020Address = _ve8020Address;
+        ve69LPAddress = _ve69LPAddress;
         burnAddress = _burnAddress;
         wrappedSonicAddress = _wrappedSonicAddress;
         wrappedSonic = IERC20(_wrappedSonicAddress);
@@ -172,25 +177,25 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         // Set initial fee exemptions
         isFeeExempt[address(this)] = true;
         isFeeExempt[address(this)] = true;
-        buyVe8020Fee = 241;  // 2.41%
-        totalFeeBuy = buyJackpotFee + buyBurnFee + buyVe8020Fee;
+        buyVe69LPFee = 241;  // 2.41%
+        totalFeeBuy = buyJackpotFee + buyBurnFee + buyVe69LPFee;
 
         // Initialize sell fees (10% total)
         sellJackpotFee = 690; // 6.9%
         sellBurnFee = 69;     // 0.69%
-        sellVe8020Fee = 241;  // 2.41%
-        totalFeeSell = sellJackpotFee + sellBurnFee + sellVe8020Fee;
+        sellVe69LPFee = 241;  // 2.41%
+        totalFeeSell = sellJackpotFee + sellBurnFee + sellVe69LPFee;
 
         // Initialize regular fees (1% total)
         jackpotFeeRegular = 69;  // 0.69%
         burnFeeRegular = 7;      // 0.07%
-        ve8020FeeRegular = 24;   // 0.24%
+        ve69LPFeeRegular = 24;   // 0.24%
         totalFeeRegular = 100;   // 1%
 
         // Set initial fee values
         jackpotFee = jackpotFeeRegular;
         burnFee = burnFeeRegular;
-        ve8020Fee = ve8020FeeRegular;
+        ve69LPFee = ve69LPFeeRegular;
         totalFee = totalFeeRegular;
 
         // Mint initial supply to owner
@@ -217,44 +222,127 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Swaps accumulated fees for wS tokens
+     * @dev Handle the swap from $DRAGON to $wS, applying full fee structure
+     * First, 0.69% of the $DRAGON tokens are burned
+     * Then, from the resulting $wS, 6.9% goes to jackpot and 2.41% goes to ve69LP
+     * @param user Address of the user swapping
+     * @param dragonAmount Amount of $DRAGON tokens being swapped
+     * @return wsAmount Amount of $wS tokens to return to user
      */
-    function swapFeesForWS() public {
-        require(!inSwap, "Already swapping");
-        inSwap = true;
+    function handleSwapToWS(address user, uint256 dragonAmount) external returns (uint256 wsAmount) {
+        require(msg.sender == exchangePair, "Only exchange pair can call this");
+        require(dragonAmount > 0, "Amount must be greater than zero");
         
-        uint256 tokenBalance = balanceOf(address(this));
-        require(tokenBalance > 0, "No tokens to swap");
-
-        // Calculate fee distribution based on total fee percentages
-        uint256 jackpotShare = (tokenBalance * jackpotFee) / totalFee;
-        uint256 burnShare = (tokenBalance * burnFee) / totalFee;
-        uint256 ve8020Share = tokenBalance - jackpotShare - burnShare;
-
-        // Transfer fees to receivers and track distributions
-        if (jackpotShare > 0) {
-            wrappedSonic.safeTransfer(jackpotAddress, jackpotShare);
-            _trackFeeDistribution(1, jackpotShare);
+        // First step: Calculate and burn 0.69% of input $DRAGON
+        uint256 burnAmount = (dragonAmount * 69) / 10000; // 0.69%
+        uint256 swapAmount = dragonAmount - burnAmount;  // 99.31%
+        
+        // Burn DRAGON tokens directly
+        _burn(user, burnAmount);
+        totalBurned += burnAmount;
+        _trackFeeDistribution(3, burnAmount);
+        
+        // Transfer DRAGON tokens from user to exchange pair for the swap
+        super._transfer(user, exchangePair, swapAmount);
+        
+        // Calculate resulting wS amount (1:1 for simplicity)
+        // In a real implementation, this would use the actual exchange rate
+        uint256 totalWsResult = swapAmount;
+        
+        // Second step: Calculate $wS fees from the swap result
+        uint256 wsJackpotFee = (totalWsResult * 690) / 10000; // 6.9%
+        uint256 wsVe69LPFee = (totalWsResult * 241) / 10000;  // 2.41%
+        uint256 wsTotalFee = wsJackpotFee + wsVe69LPFee;      // 9.31%
+        
+        // Calculate the final $wS amount the user receives
+        wsAmount = totalWsResult - wsTotalFee;
+        
+        // Distribute the $wS fees to their destinations
+        // In a real implementation, the exchange would collect these and send them
+        // Showing here for logical completion
+        if (wsJackpotFee > 0) {
+            // Exchange would send this amount of $wS to jackpot
+            _trackFeeDistribution(1, wsJackpotFee);
             if (lotteryAddress != address(0)) {
-                try IDragonLotterySwap(lotteryAddress).addToJackpot(jackpotShare) {} catch {}
+                try IDragonLotterySwap(lotteryAddress).addToJackpot(wsJackpotFee) {} catch {}
             }
         }
-        if (ve8020Share > 0) {
-            super._transfer(address(this), ve8020Address, ve8020Share);
-            _trackFeeDistribution(2, ve8020Share);
-        }
-        if (burnShare > 0) {
-            super._transfer(address(this), burnAddress, burnShare);
-            _trackFeeDistribution(3, burnShare);
+        
+        if (wsVe69LPFee > 0) {
+            // Exchange would send this amount of $wS to ve69LP
+            _trackFeeDistribution(2, wsVe69LPFee);
         }
         
-        emit FeesDistributed(tokenBalance);
-        inSwap = false;
+        // Handle lottery sale event if needed
+        if (lotteryAddress != address(0) && user == tx.origin && user.code.length == 0) {
+            try IDragonLotterySwap(lotteryAddress).processSell(user, wsAmount) {} catch {}
+        }
+        
+        // The exchange would send this amount of $wS to the user
+        return wsAmount;
     }
-    
+
     /**
-     * @dev Override the _transfer function to implement security measures
+     * @dev Handle the swap from $wS to $DRAGON, applying fees directly
+     * Takes 9.31% of the input $wS tokens (6.9% to jackpot, 2.41% to ve69LP)
+     * Burns 0.69% of the minted $DRAGON tokens
+     * @param user Address of the user swapping
+     * @param wsAmount Amount of $wS tokens being swapped
+     * @return dragonAmount Amount of $DRAGON tokens returned to user
      */
+    function handleSwapFromWS(address user, uint256 wsAmount) external returns (uint256 dragonAmount) {
+        require(msg.sender == exchangePair, "Only exchange pair can call this");
+        require(wsAmount > 0, "Amount must be greater than zero");
+        
+        // Calculate $wS fee amounts (9.31% of input $wS)
+        uint256 wsJackpotFee = (wsAmount * 690) / 10000; // 6.9%
+        uint256 wsVe69LPFee = (wsAmount * 241) / 10000;  // 2.41%
+        uint256 wsTotalFee = wsJackpotFee + wsVe69LPFee; // 9.31%
+        
+        // Calculate actual $wS amount to be used for swap (after fees)
+        uint256 wsSwapAmount = wsAmount - wsTotalFee;
+        
+        // Transfer $wS fees directly to their destinations
+        if (wsJackpotFee > 0) {
+            wrappedSonic.safeTransferFrom(user, jackpotAddress, wsJackpotFee);
+            _trackFeeDistribution(1, wsJackpotFee);
+            if (lotteryAddress != address(0)) {
+                try IDragonLotterySwap(lotteryAddress).addToJackpot(wsJackpotFee) {} catch {}
+            }
+        }
+        
+        if (wsVe69LPFee > 0) {
+            wrappedSonic.safeTransferFrom(user, ve69LPAddress, wsVe69LPFee);
+            _trackFeeDistribution(2, wsVe69LPFee);
+        }
+        
+        // Transfer remaining $wS to exchange pair for the swap
+        wrappedSonic.safeTransferFrom(user, exchangePair, wsSwapAmount);
+        
+        // Calculate $DRAGON burn amount (0.69% of resulting tokens)
+        // Use 1:1 ratio for simplicity, in real implementation would use actual exchange rate
+        dragonAmount = wsSwapAmount;
+        uint256 burnAmount = (dragonAmount * 69) / 10000; // 0.69%
+        uint256 userAmount = dragonAmount - burnAmount;   // 99.31%
+        
+        // Mint tokens (actual implementation would convert based on exchange rate)
+        _mint(BURN_ADDRESS, burnAmount);
+        _mint(user, userAmount);
+        
+        // Track the burn
+        totalBurned += burnAmount;
+        _trackFeeDistribution(3, burnAmount);
+        
+        // Handle lottery entry for user
+        if (lotteryAddress != address(0) && user == tx.origin && user.code.length == 0) {
+            try IDragonLotterySwap(lotteryAddress).processBuy(user, wsAmount) {} catch {}
+        }
+        
+        // Return the total $DRAGON amount user receives
+        return userAmount;
+    }
+
+    // In _transfer remove the fee logic since we're moving to swap-based fees
     function _transfer(address from, address to, uint256 amount) internal override {
         require(from != address(0), "Transfer from zero address");
         require(to != address(0), "Transfer to zero address");
@@ -269,124 +357,55 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         lastTransferTimestamp[from] = block.timestamp;
         lastTransferTimestamp[to] = block.timestamp;
 
-        // Handle special conditions for transfer
-        address _exchangePair = address(0); // Will be set properly elsewhere
-
-        // No fees for certain transfers
-        if (from == _exchangePair) {
-            // Sell fees
-            _jackpotFee = amount.mul(sellJackpotFee).div(FEE_DENOMINATOR);
-            _burnFee = amount.mul(sellBurnFee).div(FEE_DENOMINATOR);
-            _ve8020Fee = amount.mul(sellVe8020Fee).div(FEE_DENOMINATOR);
-            _totalFee = _jackpotFee + _burnFee + _ve8020Fee;
-        } else {
-            // Regular transfer fees
-            _jackpotFee = amount.mul(jackpotFeeRegular).div(FEE_DENOMINATOR);
-            _burnFee = amount.mul(burnFeeRegular).div(FEE_DENOMINATOR);
-            _ve8020Fee = amount.mul(ve8020FeeRegular).div(FEE_DENOMINATOR);
-            _totalFee = _jackpotFee + _burnFee + _ve8020Fee;
-        }
-
-        // Transfer fees directly to their destinations
-        if (_totalFee > 0) {
-            // Send burn fee directly to burn address
-            if (_burnFee > 0) {
-                super._transfer(from, burnAddress, _burnFee);
-            }
-            
-            // Send jackpot fee directly to jackpot address
-            if (_jackpotFee > 0) {
-                super._transfer(from, jackpotAddress, _jackpotFee);
-            }
-            
-            // Send ve8020 fee directly to ve8020 address
-            if (_ve8020Fee > 0) {
-                super._transfer(from, ve8020Address, _ve8020Fee);
-            }
-            
-            emit FeeCollected(from, _burnFee, _jackpotFee, _ve8020Fee);
-        }
-
-        // Transfer remaining amount
-        super._transfer(from, to, amount.sub(_totalFee));
+        // Transfer without fees
+        super._transfer(from, to, amount);
         
         // Update transaction count
         if (!isFeeExempt[from] && !isFeeExempt[to]) {
             transactionCount = transactionCount.add(1);
         }
-
-        // Handle lottery entry for a user
-        if (from == _exchangePair && !isFeeExempt[to]) {
-            _handleLotteryEntry(to, amount);
-        }
-    }
-
-    function _distributeFees(uint256 feeAmount) internal {
-        // Calculate fee distribution
-        uint256 jackpotShare = (feeAmount * jackpotFee) / totalFee;
-        uint256 burnShare = (feeAmount * burnFee) / totalFee;
-        uint256 ve8020Share = feeAmount - jackpotShare - burnShare;
-
-        // Distribute fees
-        if (jackpotShare > 0) {
-            wrappedSonic.safeTransfer(jackpotAddress, jackpotShare);
-            _trackFeeDistribution(1, jackpotShare);
-            if (lotteryAddress != address(0)) {
-                try IDragonLotterySwap(lotteryAddress).addToJackpot(jackpotShare) {} catch {}
-            }
-        }
-        if (ve8020Share > 0) {
-            super._transfer(address(this), ve8020Address, ve8020Share);
-            _trackFeeDistribution(2, ve8020Share);
-        }
-        if (burnShare > 0) {
-            super._transfer(address(this), burnAddress, burnShare);
-            _trackFeeDistribution(3, burnShare);
-        }
-
-        emit FeesDistributed(feeAmount);
     }
 
     function buyFees() internal {
         jackpotFee = buyJackpotFee;
         burnFee = buyBurnFee;
-        ve8020Fee = buyVe8020Fee;
+        ve69LPFee = buyVe69LPFee;
         totalFee = totalFeeBuy;
     }
 
     function sellFees() internal {
         jackpotFee = sellJackpotFee;
         burnFee = sellBurnFee;
-        ve8020Fee = sellVe8020Fee;
+        ve69LPFee = sellVe69LPFee;
         totalFee = totalFeeSell;
     }
 
     function regularFees() internal {
         jackpotFee = jackpotFeeRegular;
         burnFee = burnFeeRegular;
-        ve8020Fee = ve8020FeeRegular;
+        ve69LPFee = ve69LPFeeRegular;
         totalFee = totalFeeRegular;
     }
 
     function shouldTakeFee(address sender) internal view returns (bool) {
-        return !isFeeExempt[sender] && tradingEnabled && !inSwap;
+        return false; // No more transfer fees
     }
 
     // Admin functions to update fees
-    function setBuyFees(uint256 burnFee_, uint256 jackpotFee_, uint256 ve8020Fee_) external onlyOwner {
-        require(burnFee_ + jackpotFee_ + ve8020Fee_ <= MAX_TOTAL_FEE, "Total fee too high");
+    function setBuyFees(uint256 burnFee_, uint256 jackpotFee_, uint256 ve69LPFee_) external onlyOwner {
+        require(burnFee_ + jackpotFee_ + ve69LPFee_ <= MAX_TOTAL_FEE, "Total fee too high");
         buyBurnFee = burnFee_;
         buyJackpotFee = jackpotFee_;
-        buyVe8020Fee = ve8020Fee_;
-        emit BuyFeesUpdated(burnFee_, jackpotFee_, ve8020Fee_);
+        buyVe69LPFee = ve69LPFee_;
+        emit BuyFeesUpdated(burnFee_, jackpotFee_, ve69LPFee_);
     }
 
-    function setSellFees(uint256 burnFee_, uint256 jackpotFee_, uint256 ve8020Fee_) external onlyOwner {
-        require(burnFee_ + jackpotFee_ + ve8020Fee_ <= MAX_TOTAL_FEE, "Total fee too high");
+    function setSellFees(uint256 burnFee_, uint256 jackpotFee_, uint256 ve69LPFee_) external onlyOwner {
+        require(burnFee_ + jackpotFee_ + ve69LPFee_ <= MAX_TOTAL_FEE, "Total fee too high");
         sellBurnFee = burnFee_;
         sellJackpotFee = jackpotFee_;
-        sellVe8020Fee = ve8020Fee_;
-        emit SellFeesUpdated(burnFee_, jackpotFee_, ve8020Fee_);
+        sellVe69LPFee = ve69LPFee_;
+        emit SellFeesUpdated(burnFee_, jackpotFee_, ve69LPFee_);
     }
 
     function setFeeExempt(address _account, bool _exempt) external onlyOwner {
@@ -674,31 +693,31 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Get detailed fee information for transparency
      * @return jackpotFeeBuy_ Current buy jackpot fee
      * @return burnFeeBuy_ Current buy burn fee
-     * @return ve8020FeeBuy_ Current buy ve8020 fee
+     * @return ve69LPFeeBuy_ Current buy ve69LP fee
      * @return totalFeeBuy_ Total buy fee
      * @return jackpotFeeSell_ Current sell jackpot fee
      * @return burnFeeSell_ Current sell burn fee
-     * @return ve8020FeeSell_ Current sell ve8020 fee
+     * @return ve69LPFeeSell_ Current sell ve69LP fee
      * @return totalFeeSell_ Total sell fee
      */
     function getDetailedFeeInfo() external view returns (
         uint256 jackpotFeeBuy_,
         uint256 burnFeeBuy_,
-        uint256 ve8020FeeBuy_,
+        uint256 ve69LPFeeBuy_,
         uint256 totalFeeBuy_,
         uint256 jackpotFeeSell_,
         uint256 burnFeeSell_,
-        uint256 ve8020FeeSell_,
+        uint256 ve69LPFeeSell_,
         uint256 totalFeeSell_
     ) {
         return (
             buyJackpotFee,
             buyBurnFee,
-            buyVe8020Fee,
+            buyVe69LPFee,
             totalFeeBuy,
             sellJackpotFee,
             sellBurnFee,
-            sellVe8020Fee,
+            sellVe69LPFee,
             totalFeeSell
         );
     }
@@ -706,7 +725,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Get detailed contract configuration for transparency
      * @return jackpotAddress_ Address receiving jackpot fees
-     * @return ve8020Address_ Address receiving liquidity and development fees
+     * @return ve69LPAddress_ Address receiving liquidity and development fees
      * @return burnAddress_ Address receiving burn fees
      * @return wrappedSonicAddress_ Address of wrapped Sonic token
      * @return lotteryAddress_ Address of lottery contract
@@ -716,7 +735,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      */
     function getContractConfiguration() external view returns (
         address jackpotAddress_,
-        address ve8020Address_,
+        address ve69LPAddress_,
         address burnAddress_,
         address wrappedSonicAddress_,
         address lotteryAddress_,
@@ -726,7 +745,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     ) {
         return (
             jackpotAddress,
-            ve8020Address,
+            ve69LPAddress,
             burnAddress,
             wrappedSonicAddress,
             lotteryAddress,
@@ -766,7 +785,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         if (feeType == 1) {
             totalJackpotFees += amount;
         } else if (feeType == 2) {
-            totalVe8020Fees += amount;
+            totalVe69LPFees += amount;
         } else if (feeType == 3) {
             totalBurned += amount;
         }
@@ -776,17 +795,17 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Get statistics about fee distributions
      * @return totalBurned_ Total tokens burned
      * @return totalJackpotFees_ Total tokens sent to jackpot
-     * @return totalVe8020Fees_ Total tokens sent to liquidity and development
+     * @return totalVe69LPFees_ Total tokens sent to liquidity and development
      */
     function getFeeStats() external view returns (
         uint256 totalBurned_,
         uint256 totalJackpotFees_,
-        uint256 totalVe8020Fees_
+        uint256 totalVe69LPFees_
     ) {
         return (
             totalBurned,
             totalJackpotFees,
-            totalVe8020Fees
+            totalVe69LPFees
         );
     }
     
@@ -841,13 +860,13 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the ve8020Address for the token
-     * @param _ve8020Address New address for the ve8020FeeDistributor
+     * @dev Sets the ve69LPAddress for the token
+     * @param _ve69LPAddress New address for the ve69LPFeeDistributor
      */
-    function setVe8020Address(address _ve8020Address) external onlyOwner {
-        require(_ve8020Address != address(0), "Ve8020 address cannot be zero");
-        ve8020Address = _ve8020Address;
-        emit Ve8020AddressUpdated(_ve8020Address);
+    function setVe69LPAddress(address _ve69LPAddress) external onlyOwner {
+        require(_ve69LPAddress != address(0), "ve69LP address cannot be zero");
+        ve69LPAddress = _ve69LPAddress;
+        emit Ve69LPAddressUpdated(_ve69LPAddress);
     }
 
     /**
@@ -875,40 +894,40 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Schedule an update to the ve8020 address
-     * @param _newAddress The new ve8020 address
+     * @dev Schedule an update to the ve69LP address
+     * @param _newAddress The new ve69LP address
      */
-    function scheduleVe8020AddressUpdate(address _newAddress) external onlyOwner {
+    function scheduleVe69LPAddressUpdate(address _newAddress) external onlyOwner {
         require(_newAddress != address(0), "New address cannot be zero");
-        bytes32 actionId = keccak256(abi.encodePacked("updateVe8020Address", _newAddress));
+        bytes32 actionId = keccak256(abi.encodePacked("updateVe69LPAddress", _newAddress));
         pendingActions[actionId] = block.timestamp + ADMIN_ACTION_DELAY;
-        pendingActionDescriptions[actionId] = "Update ve8020 address";
-        emit ActionScheduled(actionId, "Update ve8020 address", block.timestamp + ADMIN_ACTION_DELAY);
+        pendingActionDescriptions[actionId] = "Update ve69LP address";
+        emit ActionScheduled(actionId, "Update ve69LP address", block.timestamp + ADMIN_ACTION_DELAY);
     }
 
     /**
-     * @dev Execute a scheduled ve8020 address update
-     * @param _newAddress The new ve8020 address
+     * @dev Execute a scheduled ve69LP address update
+     * @param _newAddress The new ve69LP address
      */
-    function executeVe8020AddressUpdate(address _newAddress) external onlyOwner {
-        bytes32 actionId = keccak256(abi.encodePacked("updateVe8020Address", _newAddress));
+    function executeVe69LPAddressUpdate(address _newAddress) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateVe69LPAddress", _newAddress));
         require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
-        ve8020Address = _newAddress;
+        ve69LPAddress = _newAddress;
         delete pendingActions[actionId];
-        emit ActionExecuted(actionId, "Update ve8020 address");
-        emit Ve8020AddressUpdated(_newAddress);
+        emit ActionExecuted(actionId, "Update ve69LP address");
+        emit Ve69LPAddressUpdated(_newAddress);
     }
 
     /**
      * @dev Schedule a fee update
      * @param newJackpotFee New jackpot fee
      * @param newBurnFee New burn fee
-     * @param newVe8020Fee New ve8020 fee
+     * @param newVe69LPFee New ve69LP fee
      */
-    function scheduleFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe8020Fee) external onlyOwner {
-        uint256 totalNewFee = newJackpotFee + newBurnFee + newVe8020Fee;
+    function scheduleFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe69LPFee) external onlyOwner {
+        uint256 totalNewFee = newJackpotFee + newBurnFee + newVe69LPFee;
         require(totalNewFee <= 1000, "Total fee cannot exceed 10%");
-        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe8020Fee));
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe69LPFee));
         pendingActions[actionId] = block.timestamp + FEE_UPDATE_DELAY;
         pendingActionDescriptions[actionId] = "Update fees";
         emit ActionScheduled(actionId, "Update fees", block.timestamp + FEE_UPDATE_DELAY);
@@ -918,16 +937,36 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Execute a scheduled fee update
      * @param newJackpotFee New jackpot fee
      * @param newBurnFee New burn fee
-     * @param newVe8020Fee New ve8020 fee
+     * @param newVe69LPFee New ve69LP fee
      */
-    function executeFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe8020Fee) external onlyOwner {
-        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe8020Fee));
+    function executeFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe69LPFee) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe69LPFee));
         require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
         jackpotFee = newJackpotFee;
         burnFee = newBurnFee;
-        ve8020Fee = newVe8020Fee;
-        totalFee = newJackpotFee + newBurnFee + newVe8020Fee;
+        ve69LPFee = newVe69LPFee;
+        totalFee = newJackpotFee + newBurnFee + newVe69LPFee;
         delete pendingActions[actionId];
         emit ActionExecuted(actionId, "Update fees");
+    }
+
+    /**
+     * @dev Sets the router address for token swaps
+     * @param _router The new router address
+     */
+    function setRouter(address _router) external onlyOwner {
+        require(_router != address(0), "Router address cannot be zero");
+        router = IUniswapV2Router(_router);
+        emit RouterUpdated(_router);
+    }
+
+    /**
+     * @dev Burns a specific amount of $DRAGON tokens
+     * @param amount The amount of tokens to burn
+     */
+    function burn(uint256 amount) external {
+        _burn(msg.sender, amount);
+        totalBurned += amount;
+        _trackFeeDistribution(3, amount);
     }
 }

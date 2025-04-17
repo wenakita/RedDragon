@@ -1,137 +1,184 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "../interfaces/IBalancerVault.sol";
 
 /**
  * @title MockBalancerVault
- * @dev A simplified mock of Balancer Vault for testing
+ * @dev Mock Balancer Vault for testing
  */
-contract MockBalancerVault {
+contract MockBalancerVault is Ownable {
     using SafeERC20 for IERC20;
     
-    // Pool ID to tokens mapping
-    mapping(bytes32 => address[]) public poolTokens;
-    mapping(bytes32 => mapping(address => uint256)) public poolBalances;
-    
-    // Last change block for each pool
-    mapping(bytes32 => uint256) public lastChangeBlock;
-    
-    struct JoinPoolRequest {
-        address[] assets;
-        uint256[] maxAmountsIn;
-        bytes userData;
-        bool fromInternalBalance;
+    struct PoolInfo {
+        address[] tokens;
+        uint256[] balances;
+        address poolToken;
+        bool exists;
     }
     
-    struct ExitPoolRequest {
-        address[] assets;
-        uint256[] minAmountsOut;
-        bytes userData;
-        bool toInternalBalance;
+    // Pool information
+    mapping(bytes32 => PoolInfo) private pools;
+    
+    // Swap rates for tokens (tokenA => tokenB => rate)
+    // Rate is multiplied by 100 (100 = 1:1, 80 = 0.8:1, 120 = 1.2:1)
+    mapping(address => mapping(address => uint256)) private swapRates;
+    
+    // Tokens to return when exiting a pool
+    mapping(address => uint256) private tokensToReturn;
+    
+    // Amount of BPT to mint when joining a pool
+    uint256 private bptAmountToMint;
+    
+    /**
+     * @dev Sets up a mock pool
+     */
+    function setupPool(
+        bytes32 poolId,
+        address[] memory tokens,
+        uint256[] memory balances,
+        address poolToken
+    ) external {
+        require(tokens.length == balances.length, "Lengths don't match");
+        
+        pools[poolId] = PoolInfo({
+            tokens: tokens,
+            balances: balances,
+            poolToken: poolToken,
+            exists: true
+        });
     }
     
-    enum JoinKind { INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT }
-    enum ExitKind { EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT }
-    
-    // Register a new pool
-    function registerPool(bytes32 poolId, address[] memory tokens) external {
-        poolTokens[poolId] = tokens;
-        lastChangeBlock[poolId] = block.number;
+    /**
+     * @dev Set the swap rate between two tokens
+     */
+    function setSwapRate(address tokenIn, address tokenOut, uint256 rate) external {
+        swapRates[tokenIn][tokenOut] = rate;
     }
     
-    // Update pool balances
-    function updatePoolBalance(bytes32 poolId, address token, uint256 balance) external {
-        poolBalances[poolId][token] = balance;
-        lastChangeBlock[poolId] = block.number;
+    /**
+     * @dev Set the amount of tokens to return when exiting a pool
+     */
+    function setTokensToReturn(address token, uint256 amount) external {
+        tokensToReturn[token] = amount;
     }
     
-    // Join pool
+    /**
+     * @dev Set the amount of BPT to mint when joining a pool
+     */
+    function setBptAmountToMint(uint256 amount) external {
+        bptAmountToMint = amount;
+    }
+    
+    /**
+     * @dev Get pool tokens and balances
+     */
+    function getPoolTokens(bytes32 poolId) external view returns (
+        address[] memory tokens,
+        uint256[] memory balances,
+        uint256 lastChangeBlock
+    ) {
+        require(pools[poolId].exists, "Pool doesn't exist");
+        return (pools[poolId].tokens, pools[poolId].balances, block.number);
+    }
+    
+    /**
+     * @dev Swap tokens
+     */
+    function swap(
+        IBalancerVault.SingleSwap memory singleSwap,
+        IBalancerVault.FundManagement memory funds,
+        uint256 limit,
+        uint256 deadline
+    ) external payable returns (uint256) {
+        require(pools[singleSwap.poolId].exists, "Pool doesn't exist");
+        require(deadline >= block.timestamp, "Deadline expired");
+        
+        // Get the swap rate
+        uint256 rate = swapRates[singleSwap.assetIn][singleSwap.assetOut];
+        require(rate > 0, "Swap rate not set");
+        
+        // Calculate the output amount
+        uint256 outputAmount = (singleSwap.amount * rate) / 100;
+        
+        // Check limit
+        if (singleSwap.kind == IBalancerVault.SwapKind.GIVEN_IN) {
+            require(outputAmount >= limit, "Output amount too low");
+        } else {
+            require(outputAmount <= limit, "Input amount too high");
+        }
+        
+        // Transfer tokens
+        IERC20(singleSwap.assetIn).safeTransferFrom(
+            funds.sender,
+            address(this),
+            singleSwap.amount
+        );
+        
+        IERC20(singleSwap.assetOut).safeTransfer(
+            funds.recipient,
+            outputAmount
+        );
+        
+        return outputAmount;
+    }
+    
+    /**
+     * @dev Join a pool
+     */
     function joinPool(
         bytes32 poolId,
         address sender,
         address recipient,
-        JoinPoolRequest memory request
+        IBalancerVault.JoinPoolRequest memory request
     ) external payable {
-        // Decode userData to get join kind
-        (uint256 joinKind, uint256[] memory amountsIn) = abi.decode(request.userData, (uint256, uint256[]));
+        require(pools[poolId].exists, "Pool doesn't exist");
         
-        // Transfer tokens from sender to pool
+        // Transfer tokens from sender to this contract
         for (uint256 i = 0; i < request.assets.length; i++) {
-            address token = request.assets[i];
-            uint256 amount = amountsIn[i];
-            
-            if (amount > 0) {
-                IERC20(token).safeTransferFrom(sender, address(this), amount);
-                poolBalances[poolId][token] += amount;
+            if (request.maxAmountsIn[i] > 0) {
+                IERC20(request.assets[i]).safeTransferFrom(
+                    sender,
+                    address(this),
+                    request.maxAmountsIn[i]
+                );
             }
         }
         
-        // For testing, we mint LP tokens based on the sum of inputs
-        address poolAddress = address(uint160(uint256(poolId) >> 96));
-        uint256 lpAmount = 0;
-        
-        // Calculate LP amount as the sum of inputs (simplified for testing)
-        for (uint256 i = 0; i < amountsIn.length; i++) {
-            lpAmount += amountsIn[i];
-        }
-        
-        // Mock minting LP tokens
-        // Use a mock function to mint tokens to recipient
-        (bool success, ) = poolAddress.call(abi.encodeWithSignature("mockMint(address,uint256)", recipient, lpAmount));
-        
-        // Update last change block
-        lastChangeBlock[poolId] = block.number;
+        // Transfer BPT tokens to recipient
+        IERC20(pools[poolId].poolToken).safeTransfer(recipient, bptAmountToMint);
     }
     
-    // Exit pool
+    /**
+     * @dev Exit a pool
+     */
     function exitPool(
         bytes32 poolId,
         address sender,
-        address recipient,
-        ExitPoolRequest memory request
+        address payable recipient,
+        IBalancerVault.ExitPoolRequest memory request
     ) external {
-        // Decode userData to get exit kind and BPT amount
-        (uint256 exitKind, uint256 bptAmountIn) = abi.decode(request.userData, (uint256, uint256));
+        require(pools[poolId].exists, "Pool doesn't exist");
         
-        // Burn BPT from sender
-        address poolAddress = address(uint160(uint256(poolId) >> 96));
-        (bool success, ) = poolAddress.call(abi.encodeWithSignature("mockBurn(address,uint256)", sender, bptAmountIn));
+        // Get the token amounts from userData
+        uint256 bptIn = abi.decode(request.userData, (uint256));
         
-        // Transfer proportional amount of tokens to recipient
+        // Transfer BPT tokens from sender to this contract
+        IERC20(pools[poolId].poolToken).safeTransferFrom(
+            sender,
+            address(this),
+            bptIn
+        );
+        
+        // Transfer tokens to recipient based on the tokensToReturn mapping
         for (uint256 i = 0; i < request.assets.length; i++) {
-            address token = request.assets[i];
-            
-            // Simplified calculation: each token gets a proportional amount based on its balance
-            uint256 totalTokenBalance = poolBalances[poolId][token];
-            uint256 tokenAmount = (totalTokenBalance * bptAmountIn) / 1e18; // Simplified calculation
-            
-            if (tokenAmount > 0) {
-                // Transfer tokens from this contract to recipient
-                IERC20(token).safeTransfer(recipient, tokenAmount);
-                poolBalances[poolId][token] -= tokenAmount;
+            uint256 amount = tokensToReturn[request.assets[i]];
+            if (amount > 0) {
+                IERC20(request.assets[i]).safeTransfer(recipient, amount);
             }
         }
-        
-        // Update last change block
-        lastChangeBlock[poolId] = block.number;
-    }
-    
-    // Get pool tokens
-    function getPoolTokens(bytes32 poolId) external view returns (
-        address[] memory tokens,
-        uint256[] memory balances,
-        uint256 lastChangeBlockNumber
-    ) {
-        tokens = poolTokens[poolId];
-        balances = new uint256[](tokens.length);
-        
-        for (uint256 i = 0; i < tokens.length; i++) {
-            balances[i] = poolBalances[poolId][tokens[i]];
-        }
-        
-        lastChangeBlockNumber = lastChangeBlock[poolId];
-        return (tokens, balances, lastChangeBlockNumber);
     }
 } 

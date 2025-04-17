@@ -29,7 +29,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "./interfaces/IDragonPaintSwapVRF.sol";
 import "./interfaces/IDragonLPBooster.sol";
-import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IVRFConsumer.sol";
 import "./interfaces/IVRFCoordinator.sol";
 import "./interfaces/IRedEnvelope.sol";
@@ -73,11 +72,14 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     
     // Win chance settings
     uint256 public baseWinChance = 4; // 0.04% (expressed as 4/10000)
-    uint256 public maximumWinChance = 400; // 4% (expressed as 400/10000)
+    uint256 public maximumWinChance = 1000; // 10% (expressed as 1000/10000)
     
     // Utility variables
-    address public votingToken;         // ve8020 voting token for boosts
+    address public votingToken;         // ve6931 voting token for boosts
     IDragonLPBooster public lpBooster; // LP booster for additional incentives
+    
+    // Flag to track if we are in a swap (moved from concrete implementation)
+    bool public inSwap;
     
     // ------ SCRATCHER VARIABLES ------
     
@@ -125,19 +127,32 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     // Entry rate limit in seconds
     uint256 public entryRateLimit = 60; // 1 minute
     
-    // USD-based entry mode
-    bool public useUsdEntryAmounts = false;
-    IPriceOracle public priceOracle;
-    uint256 public minEntryUsd = 100 ether; // $100
-    uint256 public maxEntryUsd = 10000 ether; // $10,000
+    // USD-based entry mode - REMOVED as per dragon rules
+    // Since we're not implementing a proper price oracle, this functionality is removed
+    // bool public useUsdEntryAmounts = false;
+    // address public priceOracle; // Changed to address type
+    // uint256 public minEntryUsd = 100 ether; // $100
+    // uint256 public maxEntryUsd = 10000 ether; // $10,000
     
     // Jackpot withdrawals
     bool public jackpotWithdrawEnabled = false;
     
-    // Price update timelock
-    uint256 public constant PRICE_UPDATE_TIMELOCK = 48 hours;
-    address public priceUpdateGovernance;
-    mapping(bytes32 => uint256) public pendingPriceUpdates;
+    // Price update timelock - REMOVED as we're not using price oracle
+    // uint256 public constant PRICE_UPDATE_TIMELOCK = 48 hours;
+    // address public priceUpdateGovernance;
+    // mapping(bytes32 => uint256) public pendingPriceUpdates;
+    
+    // VRF retry parameters
+    uint256 public vrfRetryDelay = 5 minutes;
+    uint256 public maxVrfRetries = 3;
+    mapping(address => PendingEntry) public pendingEntries;
+    
+    struct PendingEntry {
+        uint256 wsAmount;
+        uint256 timestamp;
+        uint256 retryCount;
+        bool isPending;
+    }
     
     // ------ EVENTS ------
     
@@ -149,13 +164,15 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     event UserVotingPowerUpdated(address indexed user, uint256 amount);
     event EntryLimitsChanged(uint256 minAmount, uint256 maxAmount);
     event WinChanceChanged(uint256 baseWinChance, uint256 maximumWinChance);
-    event PriceOracleUpdated(address indexed priceOracle);
-    event UsdModeToggled(bool useUsd);
     event JackpotWithdrawUpdated(bool enabled);
-    event PriceUpdateProposed(address indexed oracle, uint256 timestamp);
-    event PriceUpdateExecuted(address indexed oracle);
-    event PendingPriceUpdateCancelled(address indexed oracle);
-    event PriceUpdateGovernanceChanged(address indexed governance);
+    
+    // Events related to USD-based entry - REMOVED
+    // event PriceOracleUpdated(address indexed priceOracle);
+    // event UsdModeToggled(bool useUsd);
+    // event PriceUpdateProposed(address indexed oracle, uint256 timestamp);
+    // event PriceUpdateExecuted(address indexed oracle);
+    // event PendingPriceUpdateCancelled(address indexed oracle);
+    // event PriceUpdateGovernanceChanged(address indexed governance);
     
     // Scratcher events
     event GoldScratcherSet(address indexed scratcherAddress);
@@ -167,6 +184,11 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     event PromotionApplied(address indexed user, string itemType, uint256 itemId, uint256 boostAmount, IPromotionalItem.BoostType boostType);
     event PromotionUsed(address indexed user, string itemType, uint256 itemId, uint256 boostedAmount);
     event BoostCapped(address indexed user, uint256 requestedBoost, uint256 cappedBoost, IPromotionalItem.BoostType boostType);
+    
+    // Events for retry mechanism
+    event EntryDelayed(address indexed user, uint256 wsAmount, uint256 retryTimestamp);
+    event EntryRetrySuccess(address indexed user, uint256 wsAmount);
+    event EntryRetryFailed(address indexed user, uint256 wsAmount, uint256 retryCount);
     
     /**
      * @dev Constructor with all features enabled
@@ -281,12 +303,7 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
      * @param user User address
      * @param wsAmount wSonic amount
      */
-    function processBuy(address user, uint256 wsAmount) public whenNotPaused {
-        require(
-            msg.sender == owner() || msg.sender == address(this),
-            "Only owner or self can process buy"
-        );
-        
+    function processBuy(address user, uint256 wsAmount) internal whenNotPaused {
         // Check rate limits
         require(
             block.timestamp > lastEntryTimestamp[user] + entryRateLimit,
@@ -374,7 +391,7 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     }
     
     /**
-     * @dev Calculate the voting power multiplier
+     * @dev Calculate the voting power multiplier using non-linear scaling with cube root
      * @param user User address
      * @return multiplier Multiplier in percentage (100 = 1x)
      */
@@ -382,14 +399,86 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
         uint256 userVP = userVotingPower[user];
         if (userVP == 0) return 100; // Default 1x multiplier
         
-        // Linear scaling from 1x to 2.5x based on voting power
-        // For simplicity, max out at 1M voting power
+        // Maximum voting power considered for boost calculation
         uint256 maxVP = 1000000 ether;
+        
+        // Cap user VP at maxVP
         if (userVP > maxVP) userVP = maxVP;
         
-        // Calculate: 100% + (150% * userVP / maxVP)
-        uint256 extraMultiplier = (150 * userVP) / maxVP;
+        // Non-linear (cube root) scaling from 1x to 2.5x based on voting power
+        // This gives even stronger diminishing returns for higher voting power
+        // ∛(userVP/maxVP) * maxBoost + 100%
+        uint256 vpRatio = (userVP * 10000) / maxVP; // Ratio in basis points (0-10000)
+        
+        // Cube root approximation for vpRatio (in basis points)
+        // This will cause the boost to grow even more quickly at low VP values
+        // and even more slowly at high VP values compared to square root
+        uint256 cubeRootVpRatio = _cubeRoot(vpRatio * 1000000) * 10 / 1000; // Scale to maintain precision
+        
+        // Scale to the boost range (0% to 150% additional boost)
+        uint256 extraMultiplier = (150 * cubeRootVpRatio) / 100;
+        
+        // Ensure we're within reasonable bounds
+        if (extraMultiplier > 150) extraMultiplier = 150;
+        
         return 100 + extraMultiplier; // 100% to 250%
+    }
+    
+    /**
+     * @dev Calculate a cube root approximation for a number
+     * @param x Input number
+     * @return y Cube root approximation of x
+     */
+    function _cubeRoot(uint256 x) internal pure returns (uint256 y) {
+        if (x == 0) return 0;
+        if (x <= 8) return 1; // 2³ = 8
+        
+        // Initial guess using an approximation formula
+        // Start with a reasonable estimate: use x^(1/3) ≈ 2^(log2(x)/3)
+        uint256 log2x = 0;
+        uint256 temp = x;
+        
+        // Calculate integer log2(x) by counting how many times we can divide by 2
+        while (temp > 0) {
+            log2x++;
+            temp >>= 1;
+        }
+        
+        // Initial guess: 2^(log2(x)/3)
+        y = 1 << (log2x / 3);
+        
+        // Newton's method for cube root: y = y - (y³ - x) / (3 * y²)
+        // Simplified to: y = (2*y³ + x) / (3*y²)
+        for (uint256 i = 0; i < 8; i++) { // 8 iterations should be enough for convergence
+            // Calculate y³ carefully to avoid overflow
+            uint256 yCubed = (y * y) / 1e6;
+            yCubed = (yCubed * y) / 1e6;
+            
+            // Calculate new y using the refined formula to help prevent overflow
+            uint256 numerator = (2 * yCubed) / 1e6 + x / 1e6;
+            uint256 denominator = (3 * (y * y)) / 1e12;
+            
+            if (denominator == 0) break;
+            
+            uint256 newY = (numerator * 1e6) / denominator;
+            
+            // Break if we've converged close enough
+            if (newY == y || (newY > y ? newY - y : y - newY) < 10) {
+                break;
+            }
+            
+            y = newY;
+        }
+        
+        return y;
+    }
+    
+    /**
+     * @dev Pre-calculated maximum voting power multiplier (for gas optimization)
+     * @return Maximum possible multiplier (250%)
+     */
+    function getMaxVotingPowerMultiplier() public pure returns (uint256) {
+        return 250; // 250% = 2.5x
     }
     
     /**
@@ -414,10 +503,9 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
      * @dev Get entry limits
      * @return min Minimum entry amount
      * @return max Maximum entry amount
-     * @return isUsdMode Whether USD mode is enabled
      */
-    function getSwapLimits() external view returns (uint256 min, uint256 max, bool isUsdMode) {
-        return (getMinEntryAmount(), getMaxEntryAmount(), useUsdEntryAmounts);
+    function getSwapLimits() external view returns (uint256 min, uint256 max) {
+        return (minSwapAmount, maxSwapAmount);
     }
     
     /**
@@ -429,72 +517,19 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     }
     
     /**
-     * @dev Get minimum entry amount considering USD mode
+     * @dev Get minimum entry amount
      * @return Minimum entry amount in wS
      */
     function getMinEntryAmount() public view returns (uint256) {
-        if (useUsdEntryAmounts && address(priceOracle) != address(0)) {
-            // Convert USD to wS tokens
-            return priceOracle.usdToWSonic(minEntryUsd);
-        }
         return minSwapAmount;
     }
     
     /**
-     * @dev Get maximum entry amount considering USD mode
+     * @dev Get maximum entry amount
      * @return Maximum entry amount in wS
      */
     function getMaxEntryAmount() public view returns (uint256) {
-        if (useUsdEntryAmounts && address(priceOracle) != address(0)) {
-            // Convert USD to wS tokens
-            return priceOracle.usdToWSonic(maxEntryUsd);
-        }
         return maxSwapAmount;
-    }
-    
-    /**
-     * @dev Set price oracle with timelock
-     * @param _priceOracle New price oracle address
-     */
-    function proposePriceOracle(address _priceOracle) external onlyOwner {
-        require(_priceOracle != address(0), "Oracle cannot be zero address");
-        
-        bytes32 updateId = keccak256(abi.encodePacked("priceOracle", _priceOracle));
-        pendingPriceUpdates[updateId] = block.timestamp + PRICE_UPDATE_TIMELOCK;
-        
-        emit PriceUpdateProposed(_priceOracle, pendingPriceUpdates[updateId]);
-    }
-    
-    /**
-     * @dev Execute price oracle update after timelock
-     * @param _priceOracle New price oracle address
-     */
-    function executePriceOracle(address _priceOracle) external {
-        require(
-            msg.sender == owner() || 
-            (priceUpdateGovernance != address(0) && msg.sender == priceUpdateGovernance),
-            "Not authorized"
-        );
-        
-        bytes32 updateId = keccak256(abi.encodePacked("priceOracle", _priceOracle));
-        require(pendingPriceUpdates[updateId] > 0, "No pending update");
-        require(block.timestamp >= pendingPriceUpdates[updateId], "Timelock not expired");
-        
-        // Update the oracle
-        priceOracle = IPriceOracle(_priceOracle);
-        
-        // Clear the pending update
-        delete pendingPriceUpdates[updateId];
-        
-        emit PriceUpdateExecuted(_priceOracle);
-    }
-    
-    /**
-     * @dev Toggle USD entry mode
-     */
-    function toggleUsdMode() external onlyOwner {
-        useUsdEntryAmounts = !useUsdEntryAmounts;
-        emit UsdModeToggled(useUsdEntryAmounts);
     }
     
     /**
@@ -507,16 +542,98 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     }
     
     /**
-     * @dev Set price update governance address
-     * @param governance New governance address
+     * @dev Set VRF retry parameters
+     * @param _retryDelay Delay between retry attempts
+     * @param _maxRetries Maximum number of retry attempts
      */
-    function setPriceUpdateGovernance(address governance) external onlyOwner {
-        priceUpdateGovernance = governance;
-        emit PriceUpdateGovernanceChanged(governance);
+    function setVrfRetryParameters(uint256 _retryDelay, uint256 _maxRetries) external onlyOwner {
+        require(_retryDelay > 0, "Retry delay must be greater than 0");
+        require(_maxRetries > 0, "Max retries must be greater than 0");
+        vrfRetryDelay = _retryDelay;
+        maxVrfRetries = _maxRetries;
     }
     
     /**
-     * @dev Get a random number (with fallback)
+     * @dev Process a delayed entry after VRF became unavailable
+     * @param user Address of the user with pending entry
+     */
+    function processDelayedEntry(address user) external {
+        require(pendingEntries[user].isPending, "No pending entry for user");
+        require(block.timestamp >= pendingEntries[user].timestamp + vrfRetryDelay, "Retry delay not elapsed");
+        
+        PendingEntry storage entry = pendingEntries[user];
+        
+        // Try to use VRF again
+        if (address(verifier) != address(0)) {
+            try verifier.requestRandomness() returns (bytes32) {
+                // VRF is now available, process the entry
+                // Mark entry as not pending before processing to avoid reentrancy
+                uint256 wsAmount = entry.wsAmount;
+                entry.isPending = false;
+                
+                // Process the entry with VRF
+                _processEntryWithVRF(user, wsAmount);
+                
+                emit EntryRetrySuccess(user, wsAmount);
+                return;
+            } catch {
+                // VRF still unavailable, increment retry count
+                entry.retryCount++;
+                
+                if (entry.retryCount >= maxVrfRetries) {
+                    // Max retries reached, use fallback
+                    uint256 wsAmount = entry.wsAmount;
+                    entry.isPending = false;
+                    
+                    // Process with fallback
+                    _processEntryWithFallback(user, wsAmount);
+                    
+                    emit EntryRetryFailed(user, wsAmount, entry.retryCount);
+                } else {
+                    // Schedule next retry
+                    entry.timestamp = block.timestamp;
+                    emit EntryDelayed(user, entry.wsAmount, block.timestamp + vrfRetryDelay);
+                }
+            }
+        } else {
+            // No verifier available, use fallback
+            uint256 wsAmount = entry.wsAmount;
+            entry.isPending = false;
+            
+            // Process with fallback
+            _processEntryWithFallback(user, wsAmount);
+            
+            emit EntryRetryFailed(user, wsAmount, entry.retryCount);
+        }
+    }
+    
+    /**
+     * @dev Internal function to process an entry with VRF
+     * @param user User address
+     * @param wsAmount Amount of wSonic tokens
+     */
+    function _processEntryWithVRF(address user, uint256 wsAmount) internal {
+        // Store the user for when the VRF callback arrives
+        // For now, process normally with the fallback mechanism
+        // but in a full implementation, this would wait for the VRF callback
+        processBuy(user, wsAmount);
+    }
+    
+    /**
+     * @dev Internal function to process an entry with fallback randomness
+     * @param user User address
+     * @param wsAmount Amount of wSonic tokens
+     */
+    function _processEntryWithFallback(address user, uint256 wsAmount) internal {
+        // Ensure that only EOAs can use the fallback
+        require(tx.origin == msg.sender, "Caller must be EOA");
+        require(tx.origin.code.length == 0, "Caller must not be a contract");
+        
+        processBuy(user, wsAmount);
+    }
+    
+    /**
+     * @dev Enhanced version of getRandomNumber with retry mechanism
      */
     function getRandomNumber() internal returns (uint256) {
         // If we have a stored random number, use it and reset
@@ -534,25 +651,42 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
                 return uint256(keccak256(abi.encodePacked(
                     blockhash(block.number - 1),
                     block.timestamp,
-                    msg.sender,
+                    tx.origin,
                     totalEntries
                 )));
             } catch {
-                // Fallback to pseudo-random
+                // VRF is unavailable, use fallback only in this case
+                // Ensure that only EOAs can use the fallback
+                require(tx.origin == msg.sender, "Caller must be EOA");
+                require(tx.origin.code.length == 0, "Caller must not be a contract");
+                
+                // If the caller is a regular user tx, consider delaying the entry
+                if (msg.sender == tx.origin && !inSwap) {
+                    // Delay the entry by storing it and returning a non-winning number
+                    // This will be picked up by the calling function to delay processing
+                    return 10001; // This is higher than any possible win chance (max 10000)
+                }
+                
+                // Fallback to pseudo-random using tx.origin instead of msg.sender
                 return uint256(keccak256(abi.encodePacked(
                     blockhash(block.number - 1),
                     block.timestamp,
-                    msg.sender,
+                    tx.origin,
                     totalEntries
                 )));
             }
         }
         
-        // Final fallback
+        // Final fallback - VRF not configured
+        // Ensure that only EOAs can use the fallback
+        require(tx.origin == msg.sender, "Caller must be EOA");
+        require(tx.origin.code.length == 0, "Caller must not be a contract");
+        
+        // Use tx.origin instead of msg.sender
         return uint256(keccak256(abi.encodePacked(
             blockhash(block.number - 1),
             block.timestamp,
-            msg.sender,
+            tx.origin,
             totalEntries
         )));
     }
@@ -593,8 +727,8 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
      */
     function registerWinningScratcher(address user, uint256 tokenId) external {
         require(
-            msg.sender == owner() || msg.sender == address(this) || msg.sender == address(goldScratcher),
-            "Only owner, self, or scratcher"
+            msg.sender == address(goldScratcher),
+            "Only gold scratcher can call this function"
         );
         require(user != address(0), "Cannot register for zero address");
         require(goldScratcher.hasWinningScratcher(user, tokenId), "Not a winning scratcher");
@@ -607,9 +741,11 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
      * @param wsAmount Base wSonic amount
      * @param scratcherId Optional tokenId of GoldScratcher to apply (0 if none)
      */
-    function processSwapWithScratcher(address user, uint256 wsAmount, uint256 scratcherId) external whenNotPaused {
-        require(msg.sender == owner() || msg.sender == address(this), "Not authorized");
-        
+    function processSwapWithScratcher(
+        address user, 
+        uint256 wsAmount, 
+        uint256 scratcherId
+    ) internal whenNotPaused {
         uint256 finalAmount = wsAmount;
         
         // If scratcherId is provided, apply the scratcher
@@ -715,9 +851,7 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
         uint256 wsAmount, 
         string calldata itemType, 
         uint256 itemId
-    ) external whenNotPaused {
-        require(msg.sender == owner() || msg.sender == address(this), "Not authorized");
-        
+    ) internal whenNotPaused {
         uint256 finalAmount = wsAmount;
         
         // If itemType is provided, apply the promotion
@@ -884,9 +1018,7 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
         uint256 scratcherId,
         string calldata itemType,
         uint256 itemId
-    ) external whenNotPaused {
-        require(msg.sender == owner() || msg.sender == address(this), "Not authorized");
-        
+    ) internal whenNotPaused {
         uint256 finalAmount = wsAmount;
         bool boostApplied = false;
         

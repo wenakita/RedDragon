@@ -2,6 +2,7 @@ require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-ethers");
 require("@nomicfoundation/hardhat-verify");
 require("dotenv").config();
+require("hardhat-gas-reporter");
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -37,17 +38,31 @@ task("launch-red-dragon", "Launches RED DRAGON on Sonic Blockchain")
  */
 module.exports = {
   solidity: {
-    version: "0.8.20",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200
+    compilers: [
+      {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          }
+        }
+      },
+      {
+        version: "0.8.9",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          }
+        }
       }
-    }
+    ]
   },
   networks: {
     hardhat: {
-      chainId: 1337
+      allowUnlimitedContractSize: true,
+      chainId: 31337
     },
     localhost: {
       url: "http://127.0.0.1:8545"
@@ -94,5 +109,10 @@ module.exports = {
   },
   mocha: {
     timeout: 40000 // 40 seconds timeout for tests
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS ? true : false,
+    currency: "USD",
+    gasPrice: 100,
   }
 }; 

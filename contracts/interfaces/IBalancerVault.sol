@@ -1,44 +1,39 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.9;
 
 /**
  * @title IBalancerVault
- * @dev Interface for interacting with Balancer/Beethoven X Vault
+ * @dev Interface for Balancer Vault (used by Beethoven X)
  */
 interface IBalancerVault {
-    enum JoinKind { INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT }
-    enum ExitKind { EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT }
-    
+    enum SwapKind { GIVEN_IN, GIVEN_OUT }
+    enum JoinKind { INIT, EXACT_TOKENS_IN_FOR_BPT_OUT, TOKEN_IN_FOR_EXACT_BPT_OUT, ALL_TOKENS_IN_FOR_EXACT_BPT_OUT }
+    enum ExitKind { EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, EXACT_BPT_IN_FOR_TOKENS_OUT, BPT_IN_FOR_EXACT_TOKENS_OUT, MANAGEMENT_FEE_TOKENS_OUT }
+
     /**
-     * @dev Join a Balancer pool
-     * @param poolId The ID of the pool to join
-     * @param sender The address sending tokens to the pool
-     * @param recipient The address receiving the BPT tokens
-     * @param request The join request with all details
+     * @dev Data for a single swap
      */
-    function joinPool(
-        bytes32 poolId,
-        address sender,
-        address recipient,
-        JoinPoolRequest memory request
-    ) external payable;
-    
+    struct SingleSwap {
+        bytes32 poolId;
+        SwapKind kind;
+        address assetIn;
+        address assetOut;
+        uint256 amount;
+        bytes userData;
+    }
+
     /**
-     * @dev Exit a Balancer pool
-     * @param poolId The ID of the pool to exit
-     * @param sender The address sending BPT tokens back
-     * @param recipient The address receiving the underlying tokens
-     * @param request The exit request with all details
+     * @dev Data for funding a swap
      */
-    function exitPool(
-        bytes32 poolId,
-        address sender,
-        address recipient,
-        ExitPoolRequest memory request
-    ) external;
-    
+    struct FundManagement {
+        address sender;
+        bool fromInternalBalance;
+        address payable recipient;
+        bool toInternalBalance;
+    }
+
     /**
-     * @dev Request structure for joining a pool
+     * @dev Data for a join pool request
      */
     struct JoinPoolRequest {
         address[] assets;
@@ -46,9 +41,9 @@ interface IBalancerVault {
         bytes userData;
         bool fromInternalBalance;
     }
-    
+
     /**
-     * @dev Request structure for exiting a pool
+     * @dev Data for an exit pool request
      */
     struct ExitPoolRequest {
         address[] assets;
@@ -56,13 +51,39 @@ interface IBalancerVault {
         bytes userData;
         bool toInternalBalance;
     }
-    
+
     /**
-     * @dev Get the current state of tokens in a pool
-     * @param poolId The ID of the pool to query
-     * @return tokens Array of token addresses in the pool
-     * @return balances Current balance of each token in the pool
-     * @return lastChangeBlock Block number when the pool was last updated
+     * @dev Executes a swap between two tokens
+     */
+    function swap(
+        SingleSwap memory singleSwap,
+        FundManagement memory funds,
+        uint256 limit,
+        uint256 deadline
+    ) external payable returns (uint256);
+
+    /**
+     * @dev Joins a pool by providing tokens in return for BPT
+     */
+    function joinPool(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        JoinPoolRequest memory request
+    ) external payable;
+
+    /**
+     * @dev Exits a pool by returning BPT in exchange for tokens
+     */
+    function exitPool(
+        bytes32 poolId,
+        address sender,
+        address payable recipient,
+        ExitPoolRequest memory request
+    ) external;
+
+    /**
+     * @dev Returns the tokens in a pool and their balances
      */
     function getPoolTokens(bytes32 poolId) external view returns (
         address[] memory tokens,
