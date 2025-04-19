@@ -1,0 +1,39 @@
+{
+  "name": "dragon-ecosystem-integrations",
+  "version": "1.0.0",
+  "description": "Integration tools for Dragon Ecosystem monitoring and analytics",
+  "main": "index.js",
+  "scripts": {
+    "setup:google": "node google/setup.js",
+    "deploy:monitoring": "gcloud functions deploy monitorContracts --runtime nodejs18 --trigger-http --entry-point monitorContractsHttp --source google --env-vars-file ../.env.google --region $(grep GOOGLE_CLOUD_REGION ../.env.google | cut -d= -f2)",
+    "deploy:analytics": "gcloud functions deploy processAnalytics --runtime nodejs18 --trigger-topic dragon-analytics --entry-point processEvent --source google --env-vars-file ../.env.google --region $(grep GOOGLE_CLOUD_REGION ../.env.google | cut -d= -f2)",
+    "deploy:dashboard": "gcloud run deploy dragon-dashboard --source google --entry-point startDashboardServer --env-vars-file ../.env.google --region $(grep GOOGLE_CLOUD_REGION ../.env.google | cut -d= -f2) --allow-unauthenticated",
+    "deploy:all": "npm run deploy:monitoring && npm run deploy:analytics && npm run deploy:dashboard",
+    "update:views": "node -e \"require('./google/dashboard').createPhaseDashboardViews()\"",
+    "update:dashboards": "node -e \"require('./google/dashboard').createAndDeployPhaseDashboards()\"",
+    "export:analytics": "node -e \"const bucket = process.env.ANALYTICS_BUCKET || 'dragon-analytics-exports'; require('./google/analytics').exportAnalyticsToStorage(bucket);\"",
+    "start:local": "export $(grep -v '^#' ../.env.google | xargs) && node -e \"require('./google/dashboard').startDashboardServer()\""
+  },
+  "keywords": [
+    "dragon",
+    "blockchain",
+    "analytics",
+    "monitoring",
+    "google-cloud"
+  ],
+  "author": "Dragon Ecosystem Team",
+  "license": "MIT",
+  "dependencies": {
+    "@google-cloud/bigquery": "^6.2.0",
+    "@google-cloud/logging": "^10.4.0",
+    "@google-cloud/pubsub": "^3.7.1",
+    "@google-cloud/storage": "^6.11.0",
+    "dotenv": "^16.3.1",
+    "ethers": "^5.7.2",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 
