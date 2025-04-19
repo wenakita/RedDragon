@@ -28,6 +28,15 @@ Thumbs.db
 # Deployment
 deployed-addresses.json
 deployment.log
+deploy/config/*
+**/deployment-files/
+**/api_key.txt
+**/private_key.txt
+**/*_key.txt
+**/*_keys.txt
+**/apikey*.txt
+**/secrets/
+**/credentials/
 
 # Testing
 *.log
