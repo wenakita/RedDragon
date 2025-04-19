@@ -130,6 +130,10 @@ contract DragonShadowV3Swapper is Ownable, ReentrancyGuard {
     // Boost cap to protect against excessive boosts
     uint256 public maxBoostBasisPoints = 690; // 6.9% max boost
     
+    // Feature flags for gradual rollout
+    bool public poolVotingEnabled = false;
+    bool public partnerBoostEnabled = false;
+    
     // Events
     event SwapWithJackpotEntry(
         address indexed user,
@@ -150,6 +154,7 @@ contract DragonShadowV3Swapper is Ownable, ReentrancyGuard {
     event PoolVotingContractUpdated(address newPoolVoting);
     event MaxBoostUpdated(uint256 newMaxBoost);
     event ProbabilityBoosted(address indexed partner, uint256 boost, uint256 wsEquivalent);
+    event FeatureFlagUpdated(string featureName, bool enabled);
     
     constructor(
         address _router,
@@ -230,7 +235,7 @@ contract DragonShadowV3Swapper is Ownable, ReentrancyGuard {
         
         // Calculate partner probability boost if pool voting is enabled
         uint256 probabilityBoost = 0;
-        if (address(poolVoting) != address(0)) {
+        if (poolVotingEnabled && partnerBoostEnabled && address(poolVoting) != address(0)) {
             probabilityBoost = poolVoting.getPartnerProbabilityBoostByAddress(msg.sender);
             
             // Cap the boost at the maximum allowed value
@@ -329,9 +334,9 @@ contract DragonShadowV3Swapper is Ownable, ReentrancyGuard {
         // Apply ve69LP boost to the base amount
         uint256 ve69LPBoostedAmount = (wsEquivalent * ve69LPBoostMultiplier) / 10000;
         
-        // Apply additional probability boost from voting as a separate component
+        // Apply additional probability boost from voting as a separate component (if feature is enabled)
         uint256 partnerBoostedAmount = 0;
-        if (probabilityBoost > 0) {
+        if (poolVotingEnabled && partnerBoostEnabled && probabilityBoost > 0) {
             // Calculate additional boost amount (e.g., if boost is 100 basis points, add 1%)
             partnerBoostedAmount = (wsEquivalent * probabilityBoost) / 10000;
             emit ProbabilityBoosted(msg.sender, probabilityBoost, partnerBoostedAmount);
@@ -411,9 +416,9 @@ contract DragonShadowV3Swapper is Ownable, ReentrancyGuard {
         // Apply ve69LP boost to the base amount
         uint256 ve69LPBoostedAmount = (wsEquivalent * boostMultiplier) / 10000;
         
-        // Apply probability boost if partner is specified as a separate component
+        // Apply probability boost if partner is specified and features are enabled
         uint256 partnerBoostedAmount = 0;
-        if (partner != address(0) && address(poolVoting) != address(0)) {
+        if (poolVotingEnabled && partnerBoostEnabled && partner != address(0) && address(poolVoting) != address(0)) {
             uint256 probabilityBoost = poolVoting.getPartnerProbabilityBoostByAddress(partner);
             
             // Cap the boost at the maximum allowed value
@@ -444,6 +449,26 @@ contract DragonShadowV3Swapper is Ownable, ReentrancyGuard {
         uint256 boostMultiplier
     ) {
         return this.estimateOutputsWithBoostAndPartner(x33Amount, user, address(0));
+    }
+    
+    // ------- FEATURE FLAG MANAGEMENT -------
+    
+    /**
+     * @dev Enable or disable the pool voting feature
+     * @param _enabled Whether the feature should be enabled
+     */
+    function setPoolVotingEnabled(bool _enabled) external onlyOwner {
+        poolVotingEnabled = _enabled;
+        emit FeatureFlagUpdated("poolVoting", _enabled);
+    }
+    
+    /**
+     * @dev Enable or disable the partner boost feature
+     * @param _enabled Whether the feature should be enabled
+     */
+    function setPartnerBoostEnabled(bool _enabled) external onlyOwner {
+        partnerBoostEnabled = _enabled;
+        emit FeatureFlagUpdated("partnerBoost", _enabled);
     }
     
     // ------- PARTNER MANAGEMENT FUNCTIONS -------
