@@ -129,7 +129,7 @@ async function createPhaseDashboardViews() {
         FROM
           \`${PROJECT_ID}.${DATASET_ID}.user_interactions\`
         WHERE
-          event_name = 'lp_token_locked'
+          (event_name = 'lp_token_locked' OR event_name = 'vote_cast')
           AND phase = 'phase1'
         GROUP BY
           day
@@ -138,19 +138,20 @@ async function createPhaseDashboardViews() {
       `
     },
     {
-      name: 'phase2_voting_metrics',
+      name: 'phase1_voting_metrics',
       query: `
         SELECT
           TIMESTAMP_TRUNC(event_timestamp, DAY) as day,
           partner_id,
           COUNT(*) as vote_count,
           SUM(CAST(vote_power as FLOAT64)) as total_vote_power,
-          COUNT(DISTINCT wallet_id) as unique_voters
+          COUNT(DISTINCT wallet_id) as unique_voters,
+          AVG(CAST(lock_duration as INT64))/86400 as avg_lock_duration_days
         FROM
           \`${PROJECT_ID}.${DATASET_ID}.user_interactions\`
         WHERE
           event_name = 'vote_cast'
-          AND phase = 'phase2'
+          AND phase = 'phase1'
         GROUP BY
           day, partner_id
         ORDER BY
@@ -158,18 +159,41 @@ async function createPhaseDashboardViews() {
       `
     },
     {
-      name: 'phase3_partner_boost_metrics',
+      name: 'phase2_shadow_dex_metrics',
+      query: `
+        SELECT
+          TIMESTAMP_TRUNC(event_timestamp, DAY) as day,
+          event_name,
+          COUNT(*) as event_count,
+          SUM(CAST(x33_amount as FLOAT64)) as total_x33_swapped,
+          SUM(CAST(ws_equivalent as FLOAT64)) as total_ws_equivalent,
+          AVG(CAST(boost_percentage as FLOAT64)) as avg_boost_percentage,
+          COUNT(DISTINCT wallet_id) as unique_users
+        FROM
+          \`${PROJECT_ID}.${DATASET_ID}.user_interactions\`
+        WHERE
+          (event_name = 'swap_with_jackpot' OR event_name LIKE '%x33%')
+          AND phase = 'phase2'
+        GROUP BY
+          day, event_name
+        ORDER BY
+          day DESC, event_count DESC
+      `
+    },
+    {
+      name: 'phase3_partner_integration',
       query: `
         SELECT
           TIMESTAMP_TRUNC(event_timestamp, DAY) as day,
           partner_address,
           AVG(CAST(boost_basis_points as FLOAT64))/100 as avg_boost_percentage,
           SUM(CAST(ws_equivalent as FLOAT64)) as total_ws_boosted,
-          COUNT(*) as boost_count
+          COUNT(*) as integration_count,
+          COUNT(DISTINCT wallet_id) as unique_users
         FROM
           \`${PROJECT_ID}.${DATASET_ID}.user_interactions\`
         WHERE
-          event_name = 'partner_boost_applied'
+          (event_name = 'partner_boost_applied' OR event_name = 'partner_swap')
           AND phase = 'phase3'
         GROUP BY
           day, partner_address
@@ -178,40 +202,68 @@ async function createPhaseDashboardViews() {
       `
     },
     {
-      name: 'phase4_ecosystem_metrics',
-      query: `
-        SELECT
-          TIMESTAMP_TRUNC(event_timestamp, DAY) as day,
-          event_name,
-          COUNT(*) as event_count,
-          COUNT(DISTINCT wallet_id) as unique_users,
-          SUM(CASE WHEN event_name = 'swap_with_jackpot' THEN CAST(x33_amount as FLOAT64) ELSE 0 END) as total_x33_swapped,
-          AVG(CASE WHEN event_name = 'swap_with_jackpot' THEN CAST(boost_percentage as FLOAT64) ELSE NULL END) as avg_boost_percentage
-        FROM
-          \`${PROJECT_ID}.${DATASET_ID}.user_interactions\`
-        WHERE
-          phase = 'phase4'
-        GROUP BY
-          day, event_name
-        ORDER BY
-          day DESC, event_count DESC
-      `
-    },
-    {
-      name: 'all_phases_comparison',
+      name: 'phase4_ecosystem_analytics',
       query: `
         SELECT
           phase,
           event_name,
           COUNT(*) as event_count,
           COUNT(DISTINCT wallet_id) as unique_users,
-          COUNT(DISTINCT TIMESTAMP_TRUNC(event_timestamp, DAY)) as active_days
+          COUNT(DISTINCT TIMESTAMP_TRUNC(event_timestamp, DAY)) as active_days,
+          SUM(CAST(CASE 
+            WHEN x33_amount IS NOT NULL THEN x33_amount 
+            WHEN lp_amount IS NOT NULL THEN lp_amount
+            WHEN ws_equivalent IS NOT NULL THEN ws_equivalent
+            ELSE 0 
+          END as FLOAT64)) as total_value_processed
         FROM
           \`${PROJECT_ID}.${DATASET_ID}.user_interactions\`
         GROUP BY
           phase, event_name
         ORDER BY
           phase, event_count DESC
+      `
+    },
+    {
+      name: 'user_retention_metrics',
+      query: `
+        WITH UserFirstActivity AS (
+          SELECT
+            wallet_id,
+            MIN(TIMESTAMP_TRUNC(event_timestamp, DAY)) as first_day
+          FROM
+            \`${PROJECT_ID}.${DATASET_ID}.user_interactions\`
+          GROUP BY
+            wallet_id
+        ),
+        UserDailyActivity AS (
+          SELECT
+            u.wallet_id,
+            TIMESTAMP_TRUNC(u.event_timestamp, DAY) as activity_day,
+            f.first_day,
+            DATE_DIFF(TIMESTAMP_TRUNC(u.event_timestamp, DAY), f.first_day, DAY) as days_since_first
+          FROM
+            \`${PROJECT_ID}.${DATASET_ID}.user_interactions\` u
+          JOIN
+            UserFirstActivity f
+          ON
+            u.wallet_id = f.wallet_id
+        )
+        
+        SELECT
+          days_since_first,
+          COUNT(DISTINCT wallet_id) as retained_users,
+          (SELECT COUNT(DISTINCT wallet_id) FROM UserFirstActivity) as total_users,
+          SAFE_DIVIDE(COUNT(DISTINCT wallet_id), 
+            (SELECT COUNT(DISTINCT wallet_id) FROM UserFirstActivity)) as retention_rate
+        FROM
+          UserDailyActivity
+        WHERE
+          days_since_first <= 30
+        GROUP BY
+          days_since_first
+        ORDER BY
+          days_since_first
       `
     }
   ];
@@ -340,13 +392,13 @@ async function createAndDeployPhaseDashboards() {
     const dashboards = [
       {
         name: 'phase1',
-        title: 'Phase 1: BeetsLP 69/31 with Locking',
+        title: 'Phase 1: BeetsLP 69/31 with Locking and Voting',
         dashboardId: process.env.PHASE1_DASHBOARD_ID,
         filename: 'phase1.html'
       },
       {
         name: 'phase2',
-        title: 'Phase 2: Voting Infrastructure',
+        title: 'Phase 2: Shadow DEX Uniswap V3 Integration',
         dashboardId: process.env.PHASE2_DASHBOARD_ID,
         filename: 'phase2.html'
       },
@@ -358,13 +410,13 @@ async function createAndDeployPhaseDashboards() {
       },
       {
         name: 'phase4',
-        title: 'Phase 4: Full Ecosystem',
+        title: 'Phase 4: Full Ecosystem Analytics',
         dashboardId: process.env.PHASE4_DASHBOARD_ID,
         filename: 'phase4.html'
       },
       {
         name: 'all',
-        title: 'Dragon Ecosystem - All Phases',
+        title: 'Dragon Ecosystem - Complete Analytics',
         dashboardId: process.env.ALL_PHASES_DASHBOARD_ID,
         filename: 'index.html'
       }

@@ -84,29 +84,33 @@ npm run update:dashboards
 
 Each phase of the Dragon Ecosystem rollout has dedicated monitoring and analytics:
 
-### Phase 1: BeetsLP 69/31 with Locking
+### Phase 1: BeetsLP 69/31 with Locking and Voting
 
 - LP token creation and locking activity
 - Lock duration distribution
-- User engagement metrics
-
-### Phase 2: Voting Infrastructure
-
-- Voting patterns
+- Voting patterns and preferences
 - Vote distribution across partners
-- Voting power utilization
+
+### Phase 2: Shadow DEX Uniswap V3 Integration
+
+- x33 token swap data and metrics
+- LP token creation through swaps
+- BeetsLP distribution analytics
+- Performance of different price calculation methods
 
 ### Phase 3: Partner Integration
 
-- Partner-specific boosts
-- Transaction volume through partners
-- Boost effectiveness
+- Partner onboarding and transaction volume
+- Partner-specific boost metrics
+- User engagement with partner services
+- Comparative partner performance
 
-### Phase 4: Full Ecosystem
+### Phase 4: Full Ecosystem Analytics
 
-- Complete ecosystem performance
-- Cross-phase comparison
-- Growth metrics
+- Complete ecosystem performance metrics
+- Cross-phase user journey analysis
+- Retention and engagement analytics
+- Long-term growth metrics
 
 ## Dashboards
 
