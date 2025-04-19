@@ -221,6 +221,11 @@ BIGQUERY_DATASET=dragon_analytics
 SERVICE_ACCOUNT_EMAIL=${serviceAccountEmail}
 
 # Feature Deployment Phase
+# Options: 
+# - phase1: BeetsLP 69/31 with Locking and Voting
+# - phase2: Shadow DEX Uniswap V3 Integration 
+# - phase3: Partner Integration
+# - phase4: Full Ecosystem Analytics
 DEPLOYMENT_PHASE=phase1
 
 # Analytics Configuration
@@ -229,17 +234,23 @@ GA_API_SECRET=
 ANALYTICS_ENABLED=true
 
 # Dashboard IDs for Looker Studio
+# Create these dashboards in Looker Studio and enter the IDs here
 PHASE1_DASHBOARD_ID=
 PHASE2_DASHBOARD_ID=
 PHASE3_DASHBOARD_ID=
 PHASE4_DASHBOARD_ID=
 ALL_PHASES_DASHBOARD_ID=
 
-# Contract Addresses
+# Contract Addresses (update these with your deployed contracts)
 BEETS_LP_ADDRESS=
 VE69LP_ADDRESS=
 POOL_VOTING_ADDRESS=
 DRAGON_SWAPPER_ADDRESS=
+
+# Shadow DEX Addresses
+X33_TOKEN_ADDRESS=
+SHADOW_TOKEN_ADDRESS=
+XSHADOW_TOKEN_ADDRESS=
 
 # Blockchain RPC URL
 RPC_URL=https://mainnet.sonic.fantom.network/
