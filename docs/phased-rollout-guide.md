@@ -1,46 +1,55 @@
-# Phased Rollout Guide for ve69LPPoolVoting Features
+# Phased Rollout Guide for DragonShadow Features
 
-This guide outlines the process for a gradual rollout of the ve69LPPoolVoting integration with DragonShadowV3Swapper.
+This guide outlines the process for a gradual rollout of the ve69LP ecosystem features, including the Beets LP integration and ve69LPPoolVoting features.
 
 ## Overview
 
-The ve69LPPoolVoting contract allows ve69LP holders to vote on partner pools to receive probability boosts in the lottery. This feature enhances the tokenomics by providing additional incentives for partners to integrate with our system.
+Our system combines several powerful components that should be rolled out in phases to ensure stability and proper adoption:
+1. Beets LP (69/31 DRAGON/wS) with locking capabilities 
+2. ve69LPPoolVoting for partner probability boosts
+3. Partner integration with partner-specific boosts
 
 The rollout approach uses feature flags to enable granular control over when specific features become available, allowing for thorough testing in production with minimal risk.
 
 ## Components
 
-1. **Ive69LPPoolVoting Interface**: The interface for the pool voting contract
-2. **Pool Voting Integration**: Allows the swapper to query the voting contract for partner boosts
-3. **Partner Boost Application**: Applies the boosts to partners during swaps
+1. **Beets LP Integration**: 69/31 DRAGON/wS LP token with locking mechanics
+2. **ve69LP Locking System**: Allows users to lock LP tokens for voting power
+3. **Ive69LPPoolVoting Interface**: The interface for the pool voting contract
+4. **Partner Boost Application**: Applies the boosts to partners during swaps
 
 ## Deployment Phases
 
-### Phase 1: Deployment with Disabled Features (Week 1)
+### Phase 1: Beets LP 69/31 with Locking Capabilities (Week 1-2)
 
-1. Deploy the updated `DragonShadowV3Swapper` contract with feature flags set to `false`
-2. Deploy the `ve69LPPoolVoting` contract to the production environment
-3. Connect the contracts by calling `setPoolVoting()` on the swapper
-4. Verify that all existing functionality continues to work without the new features
-5. Set a conservative `maxBoostBasisPoints` value (e.g., 100 = 1%)
+1. Deploy the Beets LP pool with 69/31 DRAGON/wS ratio
+2. Deploy the `ve69LP` contract for locking LP tokens
+3. Implement the basic locking mechanics and voting power calculations
+4. Deploy the `DragonShadowV3Swapper` contract with feature flags set to `false`
+5. Set up the initial fee distribution parameters
 
 **Testing:**
-- Verify regular swaps work without interruption
-- Confirm partner swaps work with standard boost calculations
+- Verify LP creation and addition of liquidity works properly
+- Test locking LP tokens for different time periods
+- Confirm voting power calculations are accurate
+- Ensure fee distributions work correctly
 
-### Phase 2: Voting Mechanism Activation (Week 2-3)
+### Phase 2: Deploy Pool Voting Infrastructure (Week 3-4)
 
-1. Enable the pool voting system by calling `setPoolVotingEnabled(true)`
-2. Keep partner boosts disabled by leaving `partnerBoostEnabled` as `false`
-3. This allows ve69LP holders to start voting and building up partner boosts
-4. Monitor the voting patterns and boost accumulation
+1. Deploy the `ve69LPPoolVoting` contract to the production environment
+2. Connect the contracts by calling `setPoolVoting()` on the swapper
+3. Enable the pool voting system by calling `setPoolVotingEnabled(true)`
+4. Keep partner boosts disabled by leaving `partnerBoostEnabled` as `false`
+5. Verify that all existing functionality continues to work without the new features
+6. Set a conservative `maxBoostBasisPoints` value (e.g., 100 = 1%)
 
 **Testing:**
 - Test voting functionality with a small group of users
 - Confirm voting contract is calculating boosts correctly
 - Verify the swapper contract can successfully query boost values
+- Ensure that existing systems remain unaffected
 
-### Phase 3: Limited Partner Boost Activation (Week 4-5)
+### Phase 3: Limited Partner Boost Activation (Week 5-6)
 
 1. Select 2-3 trusted partners for initial partner boost testing
 2. Authorize these partners using `setPartnerAuthorization()`
@@ -53,28 +62,32 @@ The rollout approach uses feature flags to enable granular control over when spe
 - Check that boost caps are working as expected
 - Confirm boost calculations in the estimation functions
 
-### Phase 4: Full Rollout (Week 6+)
+### Phase 4: Full Rollout and Partner Expansion (Week 7+)
 
 1. Gradually increase the `maxBoostBasisPoints` value (up to 690 = 6.9%)
 2. Add more authorized partners to the system
-3. Consider implementing a partner registry for more automated authorization
+3. Implement the partner registry for more automated authorization
 4. Monitor system performance with full boosts enabled
+5. Optimize gas usage and user experience
 
 **Testing:**
 - Conduct load testing with multiple partners
 - Verify gas usage remains within acceptable limits
 - Check for any unexpected interactions with other contract features
+- Monitor LP lock/unlock and voting behavior
 
 ## Monitoring and Metrics
 
 During the rollout, monitor the following metrics:
 
-1. Number of users participating in voting
-2. Distribution of votes across partners
-3. Average and maximum partner boosts
-4. Partner transaction volume
-5. User engagement with partner platforms
-6. Gas costs for transactions with boosts
+1. Beets LP token creation and locking activity
+2. Lock duration distribution (how long users choose to lock)
+3. Number of users participating in voting
+4. Distribution of votes across partners
+5. Average and maximum partner boosts
+6. Partner transaction volume
+7. User engagement with partner platforms
+8. Gas costs for transactions with boosts
 
 ## Rollback Plan
 
@@ -106,4 +119,4 @@ function setPoolVoting(address _poolVoting) external onlyOwner
 
 ## Conclusion
 
-This phased approach minimizes risk while allowing for a controlled rollout of the ve69LPPoolVoting features. By using feature flags, we can quickly respond to any issues that arise and fine-tune the system based on real-world usage patterns. 
+This phased approach minimizes risk while allowing for a controlled rollout of the ve69LP ecosystem features. By focusing first on the foundational 69/31 Beets LP and locking capabilities, we ensure the core infrastructure is stable before enabling the more complex voting and partner boost mechanics. 
