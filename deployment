@@ -1,0 +1,108 @@
+# Dragon Project Deployment Guide
+
+## Deployment Sequence Overview
+
+| Step | Contract/Action | Script | Type | Dependencies |
+|------|----------------|--------|------|--------------|
+| 1 | Deploy $DRAGON Token | `deploy-dragon.js` | Script | None |
+| 2 | Create LP Pool | Beets UI | User | $DRAGON Token |
+| 3 | Deploy ve69LP | `deploy-ve69lp.js` | Script | LP Token Address |
+| 4 | Deploy Jackpot | `deploy-jackpot.js` | Script | $DRAGON Token |
+| 5 | Deploy ve69LPBoost | `deploy-ve69lpboost.js` | Script | ve69LP, Jackpot |
+| 6 | Deploy ve69LPfeedistributor | `deploy-feedistributor.js` | Script | $DRAGON, ve69LP |
+| 7 | Deploy DragonLotterySwap | `deploy-lotteryswap.js` | Script | $DRAGON, Jackpot, ve69LPBoost |
+| 8 | Configure Contracts | `configure-all.js` | Script | All contracts |
+
+
+## Automatic Contract Interactions
+
+Once deployed, these contract interactions happen automatically:
+
+| Interaction | Trigger | Automatic Action |
+|-------------|---------|------------------|
+| Fee Distribution | $DRAGON transfer | 6.9% to jackpot, 2.41% to distributor, 0.69% burned |
+| Boost Calculation | User interaction | ve69LPBoost calculates cubic root normalized boost |
+| Lottery Entry | Swap to $DRAGON | Entry recorded with boost applied |
+| VRF Request | Lottery trigger | Automatic request to PaintSwap VRF |
+| Fallback Random | VRF failure | Secure fallback random number generation |
+
+## Post-Deployment Verification
+
+After deployment, manually verify:
+
+1. All contracts on block explorer
+2. Execute test transfers to confirm fee distribution
+3. Create test ve69LP locks to verify boost calculation
+4. Test lottery entries to confirm VRF integration
+5. Verify ownership has been properly transferred 
+
+## Detailed Deployment Steps
+
+### 1. Deploy $DRAGON Token
+- **Action**: Deploy the $DRAGON ERC-20 token
+- **Script**: `npx hardhat run scripts/deploy-dragon.js --network sonic`
+- **Type**: Manual deployment
+- **Notes**: This is the foundation token for the entire ecosystem
+
+### 2. Create LP Pool
+- **Action**: Create liquidity pool on Beets/Balancer
+- **Script**: N/A (Use Beets UI)
+- **Type**: Manual through web interface
+- **Notes**: 
+  - Add initial liquidity with $DRAGON and pair token
+  - Record the LP token address for next step
+  - Typical ratio is 69/31
+
+### 3. Deploy ve69LP
+- **Action**: Deploy vote-escrow token for LP
+- **Script**: `npx hardhat run scripts/deploy-ve69lp.js --network sonic`
+- **Type**: Manual deployment
+- **Arguments**: LP token address from step 2
+- **Notes**: 
+  - If LP token not yet available, can deploy with placeholder and use `setLpToken` later
+  - Must set LP token before any locks are created
+
+### 4. Deploy Jackpot
+- **Action**: Deploy Jackpot contract
+- **Script**: `npx hardhat run scripts/deploy-jackpot.js --network sonic`
+- **Type**: Manual deployment
+- **Arguments**: $DRAGON token address
+- **Notes**: Handles prize pool and distribution
+
+### 5. Deploy ve69LPBoost
+- **Action**: Deploy boost calculator for ve69LP holders
+- **Script**: `npx hardhat run scripts/deploy-ve69lpboost.js --network sonic`
+- **Type**: Manual deployment
+- **Arguments**: ve69LP address, Jackpot address
+- **Notes**: 
+  - Uses cubic root normalization
+  - Default baseBoost = 10000 (100%)
+  - Default maxBoost = 25000 (250%)
+
+### 6. Deploy ve69LPfeedistributor
+- **Action**: Deploy fee distributor contract
+- **Script**: `npx hardhat run scripts/deploy-feedistributor.js --network sonic`
+- **Type**: Manual deployment
+- **Arguments**: $DRAGON address, ve69LP address
+- **Notes**: Distributes 2.41% of fees to ve69LP holders
+
+### 7. Deploy DragonLotterySwap
+- **Action**: Deploy lottery and swap integration
+- **Script**: `npx hardhat run scripts/deploy-lotteryswap.js --network sonic`
+- **Type**: Manual deployment
+- **Arguments**: $DRAGON, Jackpot, ve69LPBoost addresses
+- **Notes**: 
+  - Sets up PaintSwap VRF integration
+  - Handles lottery entries during swaps
+
+### 8. Configure All Contracts
+- **Action**: Configure parameters and permissions
+- **Script**: `npx hardhat run scripts/configure-all.js --network sonic`
+- **Type**: Manual execution
+- **Configuration**:
+  - Set fee percentages (6.9% to jackpot, 2.41% to distributor, 0.69% burn)
+  - Setup PaintSwap VRF configuration
+  - Transfer contract ownerships to final addresses
+  - Set final boost parameters
+
+
