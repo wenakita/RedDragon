@@ -58,6 +58,7 @@ contract ve69LP is Ownable, ReentrancyGuard {
     event Deposit(address indexed provider, uint256 value, uint256 locktime, uint256 timestamp);
     event Withdraw(address indexed provider, uint256 value, uint256 timestamp);
     event Supply(uint256 prevSupply, uint256 supply);
+    event LpTokenUpdated(address indexed newLpToken);
     
     /**
      * @dev Constructor
@@ -359,5 +360,21 @@ contract ve69LP is Ownable, ReentrancyGuard {
         });
         
         emit Supply(prevSupply, totalSupply);
+    }
+    
+    /**
+     * @dev Allows the owner to set the LP token address after deployment
+     * This is useful for manual LP setup through Beets UI
+     * @param _newLpToken Address of the new LP token
+     */
+    function setLpToken(address _newLpToken) external onlyOwner {
+        require(_newLpToken != address(0), "LP token address cannot be zero");
+        require(totalSupply == 0, "Cannot change LP token after locks have been created");
+        
+        // Update token address
+        lpToken = IERC20(_newLpToken);
+        
+        // Emit event to log the change
+        emit LpTokenUpdated(_newLpToken);
     }
 } 
