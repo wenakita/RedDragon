@@ -125,22 +125,10 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     mapping(address => uint256) public lastEntryTimestamp;
     
     // Entry rate limit in seconds
-    uint256 public entryRateLimit = 60; // 1 minute
-    
-    // USD-based entry mode - REMOVED as per dragon rules
-    // Since we're not implementing a proper price oracle, this functionality is removed
-    // bool public useUsdEntryAmounts = false;
-    // address public priceOracle; // Changed to address type
-    // uint256 public minEntryUsd = 100 ether; // $100
-    // uint256 public maxEntryUsd = 10000 ether; // $10,000
+    uint256 public entryRateLimit = 7 seconds; // ~6.9 seconds
     
     // Jackpot withdrawals
     bool public jackpotWithdrawEnabled = false;
-    
-    // Price update timelock - REMOVED as we're not using price oracle
-    // uint256 public constant PRICE_UPDATE_TIMELOCK = 48 hours;
-    // address public priceUpdateGovernance;
-    // mapping(bytes32 => uint256) public pendingPriceUpdates;
     
     // VRF retry parameters
     uint256 public vrfRetryDelay = 5 minutes;
@@ -165,14 +153,6 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
     event EntryLimitsChanged(uint256 minAmount, uint256 maxAmount);
     event WinChanceChanged(uint256 baseWinChance, uint256 maximumWinChance);
     event JackpotWithdrawUpdated(bool enabled);
-    
-    // Events related to USD-based entry - REMOVED
-    // event PriceOracleUpdated(address indexed priceOracle);
-    // event UsdModeToggled(bool useUsd);
-    // event PriceUpdateProposed(address indexed oracle, uint256 timestamp);
-    // event PriceUpdateExecuted(address indexed oracle);
-    // event PendingPriceUpdateCancelled(address indexed oracle);
-    // event PriceUpdateGovernanceChanged(address indexed governance);
     
     // Scratcher events
     event GoldScratcherSet(address indexed scratcherAddress);
@@ -303,7 +283,7 @@ abstract contract DragonLotterySwap is Ownable, ReentrancyGuard, Pausable, IVRFC
      * @param user User address
      * @param wsAmount wSonic amount
      */
-    function processBuy(address user, uint256 wsAmount) internal whenNotPaused {
+    function processBuy(address user, uint256 wsAmount) internal virtual whenNotPaused {
         // Check rate limits
         require(
             block.timestamp > lastEntryTimestamp[user] + entryRateLimit,

@@ -19,7 +19,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
-import "./interfaces/IVe69LP.sol";
+import "./interfaces/Ive69LP.sol";
 
 /**
  * @title ve69LPFeeDistributor
@@ -30,7 +30,7 @@ contract ve69LPFeeDistributor is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     // Core state variables
-    IVe69LP public veToken;
+    Ive69LP public veToken;
     IERC20 public wrappedSonic; // wS (Wrapped Sonic) Token - used for rewards
     
     // Mapping of user => epoch => claimed status
@@ -70,7 +70,7 @@ contract ve69LPFeeDistributor is Ownable, ReentrancyGuard {
         require(_veToken != address(0), "ve69LP address cannot be zero");
         require(_wrappedSonic != address(0), "WrappedSonic address cannot be zero");
         
-        veToken = IVe69LP(_veToken);
+        veToken = Ive69LP(_veToken);
         wrappedSonic = IERC20(_wrappedSonic);
         
         // Initialize first epoch

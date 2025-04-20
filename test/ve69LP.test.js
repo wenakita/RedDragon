@@ -1,8 +1,8 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Ve69LP", function () {
-  let Ve69LP;
+describe("ve69LP", function () {
+  let ve69LP;
   let tokenLP;
   let owner;
   let user1;
@@ -16,22 +16,27 @@ describe("Ve69LP", function () {
     [owner, user1, user2] = await ethers.getSigners();
 
     // Deploy the mock ERC20 token to represent the LP token
-    const MockERC20 = await ethers.getContractFactory("MockERC20");
-    tokenLP = await MockERC20.deploy("LP Token", "LP", ethers.utils.parseEther("1000000"));
+    const MockERC20 = await ethers.getContractFactory("contracts/mocks/MockERC20.sol:MockERC20");
+    tokenLP = await MockERC20.deploy("LP", "LP", 18);
     await tokenLP.deployed();
 
-    // Deploy the Ve69LP token
-    const Ve69LPFactory = await ethers.getContractFactory("Ve69LP");
-    Ve69LP = await Ve69LPFactory.deploy(tokenLP.address);
-    await Ve69LP.deployed();
+    // Mint LP tokens to users
+    await tokenLP.mint(user1.address, ethers.utils.parseEther("10000"));
+    await tokenLP.mint(user2.address, ethers.utils.parseEther("5000"));
 
-    // Transfer some tokens to the users for locking
-    await tokenLP.transfer(user1.address, ethers.utils.parseEther("10000"));
-    await tokenLP.transfer(user2.address, ethers.utils.parseEther("5000"));
+    // Deploy the ve69LP token
+    const ve69LPFactory = await ethers.getContractFactory("ve69LP");
+    ve69LP = await ve69LPFactory.deploy(tokenLP.address);
+    await ve69LP.deployed();
 
-    // Users approve Ve69LP to spend their tokens
-    await tokenLP.connect(user1).approve(Ve69LP.address, ethers.utils.parseEther("10000"));
-    await tokenLP.connect(user2).approve(Ve69LP.address, ethers.utils.parseEther("5000"));
+    // Get block timestamp
+    const blockNumBefore = await ethers.provider.getBlockNumber();
+    const blockBefore = await ethers.provider.getBlock(blockNumBefore);
+    blockTimestamp = blockBefore.timestamp;
+
+    // Users approve ve69LP to spend their tokens
+    await tokenLP.connect(user1).approve(ve69LP.address, ethers.utils.parseEther("10000"));
+    await tokenLP.connect(user2).approve(ve69LP.address, ethers.utils.parseEther("5000"));
 
     // Deploy the token contract
     const Token = await ethers.getContractFactory("MockERC20");
@@ -41,9 +46,9 @@ describe("Ve69LP", function () {
 
   describe("Initial State", function() {
     it("should have correct initial state", async function () {
-      expect(await Ve69LP.lpToken()).to.equal(tokenLP.address);
-      expect(await Ve69LP.totalSupply()).to.equal(0);
-      expect(await Ve69LP.epoch()).to.equal(0);
+      expect(await ve69LP.lpToken()).to.equal(tokenLP.address);
+      expect(await ve69LP.totalSupply()).to.equal(0);
+      expect(await ve69LP.epoch()).to.equal(0);
     });
   });
 
@@ -54,18 +59,18 @@ describe("Ve69LP", function () {
       const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
       const lockTime = currentTime + 365 * 86400; // 1 year from now
       
-      await Ve69LP.connect(user1).createLock(lockAmount, lockTime);
+      await ve69LP.connect(user1).createLock(lockAmount, lockTime);
       
       // Check lock was created
-      const [lockedAmount, unlockTime] = await Ve69LP.getLock(user1.address);
+      const [lockedAmount, unlockTime] = await ve69LP.getLock(user1.address);
       expect(lockedAmount).to.equal(lockAmount);
       
       // Check voting power was assigned
-      const votingPower = await Ve69LP.balanceOf(user1.address);
+      const votingPower = await ve69LP.balanceOf(user1.address);
       expect(votingPower).to.be.gt(0);
       
       // Check total supply was updated
-      expect(await Ve69LP.totalSupply()).to.equal(votingPower);
+      expect(await ve69LP.totalSupply()).to.equal(votingPower);
     });
 
     it("should not allow locking with too short lock time", async function() {
@@ -74,7 +79,7 @@ describe("Ve69LP", function () {
       const shortLockTime = currentTime + 86400; // 1 day from now
       
       await expect(
-        Ve69LP.createLock(amount, shortLockTime)
+        ve69LP.createLock(amount, shortLockTime)
       ).to.be.revertedWith("Lock time must be at least 1 week");
     });
 
@@ -84,7 +89,7 @@ describe("Ve69LP", function () {
       const lockTime = currentTime + 5 * 365 * 86400; // 5 years from now
       
       await expect(
-        Ve69LP.connect(user1).createLock(lockAmount, lockTime)
+        ve69LP.connect(user1).createLock(lockAmount, lockTime)
       ).to.be.revertedWith("Lock time too long");
     });
 
@@ -92,7 +97,7 @@ describe("Ve69LP", function () {
       const lockTime = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year from now
       
       await expect(
-        Ve69LP.connect(user1).createLock(0, lockTime)
+        ve69LP.connect(user1).createLock(0, lockTime)
       ).to.be.revertedWith("Must lock non-zero amount");
     });
   });
@@ -103,21 +108,21 @@ describe("Ve69LP", function () {
       const initialAmount = ethers.utils.parseEther("1000");
       const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
       const lockTime = currentTime + 365 * 86400; // 1 year from now
-      await Ve69LP.connect(user1).createLock(initialAmount, lockTime);
+      await ve69LP.connect(user1).createLock(initialAmount, lockTime);
       
       // Get initial voting power
-      const initialVotingPower = await Ve69LP.balanceOf(user1.address);
+      const initialVotingPower = await ve69LP.balanceOf(user1.address);
       
       // Increase lock amount
       const additionalAmount = ethers.utils.parseEther("500");
-      await Ve69LP.connect(user1).increaseLockAmount(additionalAmount);
+      await ve69LP.connect(user1).increaseLockAmount(additionalAmount);
       
       // Check new lock amount
-      const [newLockedAmount, unlockTime] = await Ve69LP.getLock(user1.address);
+      const [newLockedAmount, unlockTime] = await ve69LP.getLock(user1.address);
       expect(newLockedAmount).to.equal(initialAmount.add(additionalAmount));
       
       // Check voting power increased
-      const newVotingPower = await Ve69LP.balanceOf(user1.address);
+      const newVotingPower = await ve69LP.balanceOf(user1.address);
       expect(newVotingPower).to.be.gt(initialVotingPower);
     });
 
@@ -126,27 +131,27 @@ describe("Ve69LP", function () {
       const initialAmount = ethers.utils.parseEther("1000");
       const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
       const initialLockTime = currentTime + 365 * 86400; // 1 year from now
-      await Ve69LP.connect(user1).createLock(initialAmount, initialLockTime);
+      await ve69LP.connect(user1).createLock(initialAmount, initialLockTime);
       
       // Get initial voting power
-      const initialVotingPower = await Ve69LP.balanceOf(user1.address);
+      const initialVotingPower = await ve69LP.balanceOf(user1.address);
       
       // Extend lock time
       const newLockTime = currentTime + 2 * 365 * 86400; // 2 years from now
-      await Ve69LP.connect(user1).extendLockTime(newLockTime);
+      await ve69LP.connect(user1).extendLockTime(newLockTime);
       
       // Check new unlock time (noting it rounds down to weeks)
-      const [lockedAmount, unlockTime] = await Ve69LP.getLock(user1.address);
+      const [lockedAmount, unlockTime] = await ve69LP.getLock(user1.address);
       expect(unlockTime).to.be.gt(initialLockTime);
       
       // Check voting power increased
-      const newVotingPower = await Ve69LP.balanceOf(user1.address);
+      const newVotingPower = await ve69LP.balanceOf(user1.address);
       expect(newVotingPower).to.be.gt(initialVotingPower);
     });
 
     it("should not allow increasing lock amount for non-existent lock", async function () {
       await expect(
-        Ve69LP.connect(user1).increaseLockAmount(ethers.utils.parseEther("500"))
+        ve69LP.connect(user1).increaseLockAmount(ethers.utils.parseEther("500"))
       ).to.be.revertedWith("No existing lock found");
     });
 
@@ -154,7 +159,7 @@ describe("Ve69LP", function () {
       const newLockTime = Math.floor(Date.now() / 1000) + 2 * 365 * 86400; // 2 years from now
       
       await expect(
-        Ve69LP.connect(user1).extendLockTime(newLockTime)
+        ve69LP.connect(user1).extendLockTime(newLockTime)
       ).to.be.revertedWith("No existing lock found");
     });
 
@@ -162,13 +167,13 @@ describe("Ve69LP", function () {
       // Create initial lock
       const initialAmount = ethers.utils.parseEther("1000");
       const initialLockTime = Math.floor(Date.now() / 1000) + 2 * 365 * 86400; // 2 years from now
-      await Ve69LP.connect(user1).createLock(initialAmount, initialLockTime);
+      await ve69LP.connect(user1).createLock(initialAmount, initialLockTime);
       
       // Try to decrease lock time
       const shorterLockTime = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year from now
       
       await expect(
-        Ve69LP.connect(user1).extendLockTime(shorterLockTime)
+        ve69LP.connect(user1).extendLockTime(shorterLockTime)
       ).to.be.revertedWith("Cannot decrease lock time");
     });
   });
@@ -180,14 +185,14 @@ describe("Ve69LP", function () {
       const lockTime = currentTime + WEEK * 4; // 4 weeks from now
       
       // Create lock
-      await Ve69LP.connect(user1).createLock(amount, lockTime);
+      await ve69LP.connect(user1).createLock(amount, lockTime);
       
       // Fast forward past lock time
       await ethers.provider.send("evm_increaseTime", [WEEK * 4 + 1]);
       await ethers.provider.send("evm_mine");
       
       // Should be able to withdraw
-      await Ve69LP.connect(user1).withdraw();
+      await ve69LP.connect(user1).withdraw();
       
       // Check LP token balance
       const lpBalance = await tokenLP.balanceOf(user1.address);
@@ -198,7 +203,7 @@ describe("Ve69LP", function () {
       expect(lpBalance).to.equal(expectedBalance);
       
       // Check lock is removed
-      const [lockedAmount, unlockTime] = await Ve69LP.getLock(user1.address);
+      const [lockedAmount, unlockTime] = await ve69LP.getLock(user1.address);
       expect(lockedAmount).to.equal(0);
       expect(unlockTime).to.equal(0);
     });
@@ -209,10 +214,10 @@ describe("Ve69LP", function () {
       const lockTime = currentTime + WEEK * 4; // 4 weeks from now
       
       // Create lock
-      await Ve69LP.connect(user1).createLock(amount, lockTime);
+      await ve69LP.connect(user1).createLock(amount, lockTime);
       
       // Get initial voting power
-      const initialVotingPower = await Ve69LP.balanceOf(user1.address);
+      const initialVotingPower = await ve69LP.balanceOf(user1.address);
       expect(initialVotingPower).to.be.gt(0);
       
       // Fast forward past lock time
@@ -220,11 +225,11 @@ describe("Ve69LP", function () {
       await ethers.provider.send("evm_mine");
       
       // Voting power should be zero
-      const expiredVotingPower = await Ve69LP.balanceOf(user1.address);
+      const expiredVotingPower = await ve69LP.balanceOf(user1.address);
       expect(expiredVotingPower).to.equal(0);
       
       // Withdraw to clean up
-      await Ve69LP.connect(user1).withdraw();
+      await ve69LP.connect(user1).withdraw();
     });
 
     it("should track total voting power correctly", async function() {
@@ -233,19 +238,19 @@ describe("Ve69LP", function () {
       const lockTime = currentTime + WEEK * 52; // 1 year from now
       
       // Create lock
-      await Ve69LP.connect(user1).createLock(amount, lockTime);
+      await ve69LP.connect(user1).createLock(amount, lockTime);
       
       // Calculate expected voting power (linear decay)
       const timeLeft = lockTime - currentTime;
       const expectedVotingPower = amount.mul(timeLeft).div(MAXTIME);
       
       // Check total voting power (allow for small rounding differences)
-      const totalVotingPower = await Ve69LP.totalVotingPower();
+      const totalVotingPower = await ve69LP.totalVotingPower();
       const difference = totalVotingPower.sub(expectedVotingPower).abs();
       expect(difference).to.be.lt(ethers.utils.parseEther("0.01")); // Less than 0.01 difference
       
       // Check individual voting power (allow for small rounding differences)
-      const userVotingPower = await Ve69LP.balanceOf(user1.address);
+      const userVotingPower = await ve69LP.balanceOf(user1.address);
       const userDifference = userVotingPower.sub(expectedVotingPower).abs();
       expect(userDifference).to.be.lt(ethers.utils.parseEther("0.01")); // Less than 0.01 difference
     });
@@ -254,10 +259,10 @@ describe("Ve69LP", function () {
       const amount = ethers.utils.parseEther("1000");
       const currentTime = (await ethers.provider.getBlock('latest')).timestamp;
       const lockTime = currentTime + WEEK * 2; // 2 weeks from now (ensure it's at least 1 week)
-      await Ve69LP.connect(user1).createLock(amount, lockTime);
+      await ve69LP.connect(user1).createLock(amount, lockTime);
       
       // Get initial total voting power
-      const initialTotalPower = await Ve69LP.totalVotingPower();
+      const initialTotalPower = await ve69LP.totalVotingPower();
       expect(initialTotalPower).to.be.gt(0);
       
       // Fast forward past lock expiration
@@ -265,10 +270,10 @@ describe("Ve69LP", function () {
       await ethers.provider.send("evm_mine");
       
       // Withdraw to trigger totalSupply update
-      await Ve69LP.connect(user1).withdraw();
+      await ve69LP.connect(user1).withdraw();
       
       // Check total voting power is close to zero
-      const finalTotalPower = await Ve69LP.totalVotingPower();
+      const finalTotalPower = await ve69LP.totalVotingPower();
       expect(finalTotalPower).to.be.lt(ethers.utils.parseEther("0.01")); // Close to zero
     });
   });
@@ -280,15 +285,15 @@ describe("Ve69LP", function () {
       
       // Lock for 1 year
       const lockTime1 = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year
-      await Ve69LP.connect(user1).createLock(lockAmount, lockTime1);
+      await ve69LP.connect(user1).createLock(lockAmount, lockTime1);
       
       // Lock for 2 years
       const lockTime2 = Math.floor(Date.now() / 1000) + 2 * 365 * 86400; // 2 years
-      await Ve69LP.connect(user2).createLock(lockAmount, lockTime2);
+      await ve69LP.connect(user2).createLock(lockAmount, lockTime2);
       
       // Check voting powers
-      const votingPower1 = await Ve69LP.balanceOf(user1.address);
-      const votingPower2 = await Ve69LP.balanceOf(user2.address);
+      const votingPower1 = await ve69LP.balanceOf(user1.address);
+      const votingPower2 = await ve69LP.balanceOf(user2.address);
       
       // Longer lock should have more voting power for same amount
       expect(votingPower2).to.be.gt(votingPower1);
@@ -299,14 +304,14 @@ describe("Ve69LP", function () {
       const lockTime = Math.floor(Date.now() / 1000) + 365 * 86400; // 1 year
       
       // Lock 1000 LP tokens
-      await Ve69LP.connect(user1).createLock(ethers.utils.parseEther("1000"), lockTime);
+      await ve69LP.connect(user1).createLock(ethers.utils.parseEther("1000"), lockTime);
       
       // Lock 2000 LP tokens
-      await Ve69LP.connect(user2).createLock(ethers.utils.parseEther("2000"), lockTime);
+      await ve69LP.connect(user2).createLock(ethers.utils.parseEther("2000"), lockTime);
       
       // Check voting powers
-      const votingPower1 = await Ve69LP.balanceOf(user1.address);
-      const votingPower2 = await Ve69LP.balanceOf(user2.address);
+      const votingPower1 = await ve69LP.balanceOf(user1.address);
+      const votingPower2 = await ve69LP.balanceOf(user2.address);
       
       // Larger amount should have more voting power for same lock time
       expect(votingPower2).to.be.gt(votingPower1);

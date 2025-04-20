@@ -1,0 +1,27 @@
+{
+  "name": "Whitelist Dragon #99",
+  "description": "A Whitelist Dragon NFT from the SonicRedDragon ecosystem. Forged in fire, bound to speed.",
+  "image": "https://ivory-accurate-pig-375.mypinata.cloud/ipfs/bafkreihb5gddz4usfef2xpce6smn64zwpum2m3abm2wk3jmvvm4sskz2au",
+  "attributes": [
+    {
+      "trait_type": "Token ID",
+      "value": 99
+    },
+    {
+      "trait_type": "Type",
+      "value": "Whitelist Dragon"
+    },
+    {
+      "trait_type": "Element",
+      "value": "Plasma"
+    },
+    {
+      "trait_type": "Affiliation",
+      "value": "SonicRedDragon"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Uncommon"
+    }
+  ]
+}

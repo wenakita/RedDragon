@@ -2,7 +2,7 @@
 
 /**
  *   ==============================
- *              Ve69LP
+ *              ve69LP
  *   ==============================
  *    Voting-Escrow Token Standard
  *   ==============================
@@ -20,13 +20,13 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
- * @title Ve69LP
+ * @title ve69LP
  * @dev Vote-Escrowed 69/31 LP token implementation
  * Users lock 69/31 LP tokens for a period of time to receive voting power
  * The voting power depends on the amount of tokens locked and the lock time
  * Follows the veCRV model from Curve Finance
  */
-contract Ve69LP is Ownable, ReentrancyGuard {
+contract ve69LP is Ownable, ReentrancyGuard {
     // Structs
     struct LockedBalance {
         uint256 amount;       // Amount of 69/31 LP tokens locked

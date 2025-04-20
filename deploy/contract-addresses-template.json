@@ -1,0 +1,24 @@
+{
+  "tokens": {
+    "dragon": "DRAGON_ADDRESS_HERE"
+  },
+  "vrf": {
+    "validator": "VRF_VALIDATOR_ADDRESS_HERE",
+    "coordinator": "0x3Ba925fdeAe6B46d0BB4d424D829982Cb2F7309e"
+  },
+  "lottery": {
+    "dragonLotterySwap": "LOTTERY_SWAP_ADDRESS_HERE",
+    "goldScratcher": "GOLD_SCRATCHER_ADDRESS_HERE"
+  },
+  "whitelist": {
+    "delayedEntryCompensation": "COMPENSATION_ADDRESS_HERE"
+  },
+  "utility": {
+    "jackpotVault": "JACKPOT_VAULT_ADDRESS_HERE",
+    "redEnvelopes": "RED_ENVELOPES_ADDRESS_HERE"
+  },
+  "constants": {
+    "chainId": 146,
+    "rpcUrl": "https://rpc.soniclabs.com"
+  }
+}

@@ -36,8 +36,13 @@ async function main() {
   console.log(`DelayedEntryCompensation address: ${compensationAddress}`);
   
   // Connect to the DragonLotterySwap contract
-  const DragonLotterySwap = await ethers.getContractFactory("DragonLotterySwap");
-  const lotterySwap = await DragonLotterySwap.attach(dragonLotterySwapAddress);
+  const DragonLotterySwapABI = [
+    "function setCompensationSystem(address) external",
+    "function setUseCompensation(bool) external",
+    "function compensationSystem() external view returns (address)",
+    "function useCompensationForVRFOutages() external view returns (bool)"
+  ];
+  const lotterySwap = await ethers.getContractAt(DragonLotterySwapABI, dragonLotterySwapAddress);
   
   // Set the compensation system
   console.log("Setting compensation system...");
