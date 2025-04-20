@@ -78,7 +78,7 @@ The ecosystem centers around the $DRAGON token which implements a transparent fe
 
 ## 🔄 Randomness & VRF Implementation
 
-- Chainlink VRF is the primary source of randomness
+- Paintswap VRF is the primary source of randomness
 - Fallback mechanism implemented for when VRF is unavailable
 - Security measures in the fallback:
   - Uses tx.origin instead of msg.sender

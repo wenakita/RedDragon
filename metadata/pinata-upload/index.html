@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dragon NFT Metadata</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #d62828;
+        }
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dragon NFT Metadata Server</h1>
+    
+    <div class="card">
+        <h2>About</h2>
+        <p>This is the metadata server for Dragon NFTs. The metadata follows the ERC-721 metadata standard.</p>
+    </div>
+    
+    <div class="card">
+        <h2>Metadata Example</h2>
+        <p>Access token metadata at: <code>/white/{tokenId}.json</code></p>
+        <p>For example: <a href="./white/1.json" target="_blank">Token #1 Metadata</a></p>
+        <pre id="json-example"></pre>
+    </div>
+
+    <div class="card">
+        <h2>Usage</h2>
+        <p>Base URL for contract: <code>https://wenakita.github.io/dragon-nft-metadata/white/</code></p>
+        <p>Image URL pattern: <code>https://wenakita.github.io/dragon-nft-metadata/images/{id}.png</code></p>
+    </div>
+    
+    <script>
+        // Fetch and display the example JSON
+        fetch('./white/1.json')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('json-example').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                document.getElementById('json-example').textContent = 'Error loading example';
+                console.error('Error fetching JSON:', error);
+            });
+    </script>
+</body>
+</html>

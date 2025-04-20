@@ -1,0 +1,14 @@
+{
+  "name": "dragon-metadata-service",
+  "version": "1.0.0",
+  "description": "NFT Metadata service for Dragon Ecosystem",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ethers": "^5.7.2",
+    "@google-cloud/secret-manager": "^4.1.3"
+  }
+}

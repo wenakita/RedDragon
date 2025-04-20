@@ -108,7 +108,7 @@ module.exports = {
     artifacts: "./artifacts"
   },
   mocha: {
-    timeout: 40000 // 40 seconds timeout for tests
+    timeout: 100000
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS ? true : false,

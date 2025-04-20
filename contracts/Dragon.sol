@@ -53,7 +53,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     uint256 public lastFeeUpdate;
     uint256 public totalBurned;
     uint256 public totalJackpotFees;
-    uint256 public totalVe69LPFees;
+    uint256 public totalve69LPFees;
     uint256 public launchTimestamp;
     uint256 public totalHolders;
     
@@ -66,13 +66,13 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     // Buy fees (in basis points, 100 = 1%)
     uint256 public buyBurnFee = 69;        // 0.69% = 69 basis points
     uint256 public buyJackpotFee = 690;    // 6.9% = 690 basis points
-    uint256 public buyVe69LPFee = 241;     // 2.41% = 241 basis points
+    uint256 public buyve69LPFee = 241;     // 2.41% = 241 basis points
     uint256 public totalFeeBuy = 1000;     // 10% = 1000 basis points
     
     // Sell fees (in basis points, 100 = 1%)
     uint256 public sellBurnFee = 69;       // 0.69% = 69 basis points
     uint256 public sellJackpotFee = 690;   // 6.9% = 690 basis points
-    uint256 public sellVe69LPFee = 241;    // 2.41% = 241 basis points
+    uint256 public sellve69LPFee = 241;    // 2.41% = 241 basis points
     uint256 public totalFeeSell = 1000;    // 10% = 1000 basis points
 
     // Regular Fees
@@ -126,7 +126,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     event ActionExecuted(bytes32 indexed actionId, string actionDescription);
     event ActionCancelled(bytes32 indexed actionId, string actionDescription);
     event OwnershipRenounced();
-    event Ve69LPAddressUpdated(address indexed newAddress);
+    event ve69LPAddressUpdated(address indexed newAddress);
     event OwnershipLocked(uint256 duration);
     event RouterUpdated(address indexed newRouter);
     event TokensTransferred(
@@ -177,14 +177,14 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         // Set initial fee exemptions
         isFeeExempt[address(this)] = true;
         isFeeExempt[address(this)] = true;
-        buyVe69LPFee = 241;  // 2.41%
-        totalFeeBuy = buyJackpotFee + buyBurnFee + buyVe69LPFee;
+        buyve69LPFee = 241;  // 2.41%
+        totalFeeBuy = buyJackpotFee + buyBurnFee + buyve69LPFee;
 
         // Initialize sell fees (10% total)
         sellJackpotFee = 690; // 6.9%
         sellBurnFee = 69;     // 0.69%
-        sellVe69LPFee = 241;  // 2.41%
-        totalFeeSell = sellJackpotFee + sellBurnFee + sellVe69LPFee;
+        sellve69LPFee = 241;  // 2.41%
+        totalFeeSell = sellJackpotFee + sellBurnFee + sellve69LPFee;
 
         // Initialize regular fees (1% total)
         jackpotFeeRegular = 69;  // 0.69%
@@ -251,8 +251,8 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         
         // Second step: Calculate $wS fees from the swap result
         uint256 wsJackpotFee = (totalWsResult * 690) / 10000; // 6.9%
-        uint256 wsVe69LPFee = (totalWsResult * 241) / 10000;  // 2.41%
-        uint256 wsTotalFee = wsJackpotFee + wsVe69LPFee;      // 9.31%
+        uint256 wsve69LPFee = (totalWsResult * 241) / 10000;  // 2.41%
+        uint256 wsTotalFee = wsJackpotFee + wsve69LPFee;      // 9.31%
         
         // Calculate the final $wS amount the user receives
         wsAmount = totalWsResult - wsTotalFee;
@@ -268,9 +268,9 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
             }
         }
         
-        if (wsVe69LPFee > 0) {
+        if (wsve69LPFee > 0) {
             // Exchange would send this amount of $wS to ve69LP
-            _trackFeeDistribution(2, wsVe69LPFee);
+            _trackFeeDistribution(2, wsve69LPFee);
         }
         
         // Handle lottery sale event if needed
@@ -296,8 +296,8 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         
         // Calculate $wS fee amounts (9.31% of input $wS)
         uint256 wsJackpotFee = (wsAmount * 690) / 10000; // 6.9%
-        uint256 wsVe69LPFee = (wsAmount * 241) / 10000;  // 2.41%
-        uint256 wsTotalFee = wsJackpotFee + wsVe69LPFee; // 9.31%
+        uint256 wsve69LPFee = (wsAmount * 241) / 10000;  // 2.41%
+        uint256 wsTotalFee = wsJackpotFee + wsve69LPFee; // 9.31%
         
         // Calculate actual $wS amount to be used for swap (after fees)
         uint256 wsSwapAmount = wsAmount - wsTotalFee;
@@ -311,9 +311,9 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
             }
         }
         
-        if (wsVe69LPFee > 0) {
-            wrappedSonic.safeTransferFrom(user, ve69LPAddress, wsVe69LPFee);
-            _trackFeeDistribution(2, wsVe69LPFee);
+        if (wsve69LPFee > 0) {
+            wrappedSonic.safeTransferFrom(user, ve69LPAddress, wsve69LPFee);
+            _trackFeeDistribution(2, wsve69LPFee);
         }
         
         // Transfer remaining $wS to exchange pair for the swap
@@ -369,14 +369,14 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     function buyFees() internal {
         jackpotFee = buyJackpotFee;
         burnFee = buyBurnFee;
-        ve69LPFee = buyVe69LPFee;
+        ve69LPFee = buyve69LPFee;
         totalFee = totalFeeBuy;
     }
 
     function sellFees() internal {
         jackpotFee = sellJackpotFee;
         burnFee = sellBurnFee;
-        ve69LPFee = sellVe69LPFee;
+        ve69LPFee = sellve69LPFee;
         totalFee = totalFeeSell;
     }
 
@@ -396,7 +396,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         require(burnFee_ + jackpotFee_ + ve69LPFee_ <= MAX_TOTAL_FEE, "Total fee too high");
         buyBurnFee = burnFee_;
         buyJackpotFee = jackpotFee_;
-        buyVe69LPFee = ve69LPFee_;
+        buyve69LPFee = ve69LPFee_;
         emit BuyFeesUpdated(burnFee_, jackpotFee_, ve69LPFee_);
     }
 
@@ -404,7 +404,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         require(burnFee_ + jackpotFee_ + ve69LPFee_ <= MAX_TOTAL_FEE, "Total fee too high");
         sellBurnFee = burnFee_;
         sellJackpotFee = jackpotFee_;
-        sellVe69LPFee = ve69LPFee_;
+        sellve69LPFee = ve69LPFee_;
         emit SellFeesUpdated(burnFee_, jackpotFee_, ve69LPFee_);
     }
 
@@ -713,11 +713,11 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         return (
             buyJackpotFee,
             buyBurnFee,
-            buyVe69LPFee,
+            buyve69LPFee,
             totalFeeBuy,
             sellJackpotFee,
             sellBurnFee,
-            sellVe69LPFee,
+            sellve69LPFee,
             totalFeeSell
         );
     }
@@ -785,7 +785,7 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
         if (feeType == 1) {
             totalJackpotFees += amount;
         } else if (feeType == 2) {
-            totalVe69LPFees += amount;
+            totalve69LPFees += amount;
         } else if (feeType == 3) {
             totalBurned += amount;
         }
@@ -795,17 +795,17 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Get statistics about fee distributions
      * @return totalBurned_ Total tokens burned
      * @return totalJackpotFees_ Total tokens sent to jackpot
-     * @return totalVe69LPFees_ Total tokens sent to liquidity and development
+     * @return totalve69LPFees_ Total tokens sent to liquidity and development
      */
     function getFeeStats() external view returns (
         uint256 totalBurned_,
         uint256 totalJackpotFees_,
-        uint256 totalVe69LPFees_
+        uint256 totalve69LPFees_
     ) {
         return (
             totalBurned,
             totalJackpotFees,
-            totalVe69LPFees
+            totalve69LPFees
         );
     }
     
@@ -863,10 +863,10 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Sets the ve69LPAddress for the token
      * @param _ve69LPAddress New address for the ve69LPFeeDistributor
      */
-    function setVe69LPAddress(address _ve69LPAddress) external onlyOwner {
+    function setve69LPAddress(address _ve69LPAddress) external onlyOwner {
         require(_ve69LPAddress != address(0), "ve69LP address cannot be zero");
         ve69LPAddress = _ve69LPAddress;
-        emit Ve69LPAddressUpdated(_ve69LPAddress);
+        emit ve69LPAddressUpdated(_ve69LPAddress);
     }
 
     /**
@@ -897,9 +897,9 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Schedule an update to the ve69LP address
      * @param _newAddress The new ve69LP address
      */
-    function scheduleVe69LPAddressUpdate(address _newAddress) external onlyOwner {
+    function scheduleve69LPAddressUpdate(address _newAddress) external onlyOwner {
         require(_newAddress != address(0), "New address cannot be zero");
-        bytes32 actionId = keccak256(abi.encodePacked("updateVe69LPAddress", _newAddress));
+        bytes32 actionId = keccak256(abi.encodePacked("updateve69LPAddress", _newAddress));
         pendingActions[actionId] = block.timestamp + ADMIN_ACTION_DELAY;
         pendingActionDescriptions[actionId] = "Update ve69LP address";
         emit ActionScheduled(actionId, "Update ve69LP address", block.timestamp + ADMIN_ACTION_DELAY);
@@ -909,25 +909,25 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Execute a scheduled ve69LP address update
      * @param _newAddress The new ve69LP address
      */
-    function executeVe69LPAddressUpdate(address _newAddress) external onlyOwner {
-        bytes32 actionId = keccak256(abi.encodePacked("updateVe69LPAddress", _newAddress));
+    function executeve69LPAddressUpdate(address _newAddress) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateve69LPAddress", _newAddress));
         require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
         ve69LPAddress = _newAddress;
         delete pendingActions[actionId];
         emit ActionExecuted(actionId, "Update ve69LP address");
-        emit Ve69LPAddressUpdated(_newAddress);
+        emit ve69LPAddressUpdated(_newAddress);
     }
 
     /**
      * @dev Schedule a fee update
      * @param newJackpotFee New jackpot fee
      * @param newBurnFee New burn fee
-     * @param newVe69LPFee New ve69LP fee
+     * @param newve69LPFee New ve69LP fee
      */
-    function scheduleFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe69LPFee) external onlyOwner {
-        uint256 totalNewFee = newJackpotFee + newBurnFee + newVe69LPFee;
+    function scheduleFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newve69LPFee) external onlyOwner {
+        uint256 totalNewFee = newJackpotFee + newBurnFee + newve69LPFee;
         require(totalNewFee <= 1000, "Total fee cannot exceed 10%");
-        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe69LPFee));
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newve69LPFee));
         pendingActions[actionId] = block.timestamp + FEE_UPDATE_DELAY;
         pendingActionDescriptions[actionId] = "Update fees";
         emit ActionScheduled(actionId, "Update fees", block.timestamp + FEE_UPDATE_DELAY);
@@ -937,15 +937,15 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
      * @dev Execute a scheduled fee update
      * @param newJackpotFee New jackpot fee
      * @param newBurnFee New burn fee
-     * @param newVe69LPFee New ve69LP fee
+     * @param newve69LPFee New ve69LP fee
      */
-    function executeFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newVe69LPFee) external onlyOwner {
-        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newVe69LPFee));
+    function executeFeeUpdate(uint256 newJackpotFee, uint256 newBurnFee, uint256 newve69LPFee) external onlyOwner {
+        bytes32 actionId = keccak256(abi.encodePacked("updateFees", newJackpotFee, newBurnFee, newve69LPFee));
         require(pendingActions[actionId] > 0 && pendingActions[actionId] <= block.timestamp, "Action not ready or expired");
         jackpotFee = newJackpotFee;
         burnFee = newBurnFee;
-        ve69LPFee = newVe69LPFee;
-        totalFee = newJackpotFee + newBurnFee + newVe69LPFee;
+        ve69LPFee = newve69LPFee;
+        totalFee = newJackpotFee + newBurnFee + newve69LPFee;
         delete pendingActions[actionId];
         emit ActionExecuted(actionId, "Update fees");
     }
@@ -961,8 +961,8 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Burns a specific amount of $DRAGON tokens
-     * @param amount The amount of tokens to burn
+     * @dev Allows burning tokens
+     * @param amount Amount of tokens to burn
      */
     function burn(uint256 amount) external {
         _burn(msg.sender, amount);

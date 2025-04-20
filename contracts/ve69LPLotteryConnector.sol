@@ -2,7 +2,7 @@
 
 /**
  *   ==========================================
- *    LOTTERY CONNECTOR FOR VE69LP TOKEN
+ *    LOTTERY CONNECTOR FOR ve69LP TOKEN
  *   ==========================================
  *
  * // "War... war never changes." - Fallout
@@ -16,16 +16,16 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./interfaces/IDragonLotterySwap.sol";
-import "./interfaces/IVe69LP.sol";
+import "./interfaces/Ive69LP.sol";
 
 /**
- * @title Ve69LPLotteryConnector
- * @dev Connects Ve69LP token holders to the lottery system with enhanced rewards
- * Users with Ve69LP tokens get bonus tickets when they enter the lottery
+ * @title ve69LPLotteryConnector
+ * @dev Connects ve69LP token holders to the lottery system with enhanced rewards
+ * @notice Users with ve69LP tokens get bonus tickets when they enter the lottery
  */
 contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
     // Core contracts
-    IVe69LP public ve69lpToken;
+    Ive69LP public ve69lpToken;
     IDragonLotterySwap public lotterySwap;
     
     // Bonus ticket scaling parameters
@@ -39,25 +39,25 @@ contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
     
     /**
      * @dev Constructor
-     * @param _ve69lpToken Address of the Ve69LP token
+     * @param _ve69lpToken Address of the ve69LP token
      * @param _lotterySwap Address of the dragon lottery swap contract
      */
     constructor(address _ve69lpToken, address _lotterySwap) {
-        require(_ve69lpToken != address(0), "Ve69LP address cannot be zero");
+        require(_ve69lpToken != address(0), "ve69LP address cannot be zero");
         require(_lotterySwap != address(0), "Lottery address cannot be zero");
         
-        ve69lpToken = IVe69LP(_ve69lpToken);
+        ve69lpToken = Ive69LP(_ve69lpToken);
         lotterySwap = IDragonLotterySwap(_lotterySwap);
     }
     
     /**
-     * @dev Enter the lottery with bonus tickets based on Ve69LP holdings
+     * @dev Enter the lottery with bonus tickets based on ve69LP holdings
      * @param _regularTickets Number of regular tickets to purchase
      */
     function enterLotteryWithBonus(uint256 _regularTickets) external nonReentrant {
         require(_regularTickets > 0, "Must buy at least one ticket");
         
-        // Get user's Ve69LP balance
+        // Get user's ve69LP balance
         uint256 veBalance = ve69lpToken.balanceOf(msg.sender);
         
         // Calculate bonus tickets
@@ -73,9 +73,9 @@ contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Calculate bonus tickets based on Ve69LP holdings
+     * @dev Calculate bonus tickets based on ve69LP holdings
      * @param _regularTickets Number of regular tickets
-     * @param _veBalance User's Ve69LP balance
+     * @param _veBalance User's ve69LP balance
      * @return Number of bonus tickets
      */
     function calculateBonusTickets(uint256 _regularTickets, uint256 _veBalance) public view returns (uint256) {
@@ -83,7 +83,7 @@ contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
             return 0;
         }
         
-        // Calculate bonus percentage based on Ve69LP balance
+        // Calculate bonus percentage based on ve69LP balance
         uint256 bonusPercent = (_veBalance * bonusScalingFactor) / 1e18;
         
         // Cap the bonus percentage
