@@ -1,110 +1,194 @@
-# Dragon Ecosystem Documentation
+# 🐉 Dragon Finance - Sonic Network Contracts
 
-Welcome to the comprehensive documentation for the Dragon Ecosystem. This repository contains all the necessary information for understanding, deploying, and interacting with the Dragon Ecosystem smart contracts and services.
+## Overview
 
-## Project Structure
+Dragon Finance is a revolutionary liquidity and reward system built on the Sonic Network, featuring innovative mechanisms including VRF-based random jackpots, probability-based rewards, LP token staking, voting-escrow (ve) model, and promotional boost mechanisms.
 
-This project has been organized into a clean directory structure:
+The ecosystem centers around the $DRAGON token which implements a transparent fee structure, automatic burning, and jackpot distribution - creating a sustainable economic model with continuous rewards for participants.
 
-- `contracts/` - Smart contract source code
-- `test/` - Test files for smart contracts
-- `scripts/` - JavaScript deployment scripts
-- `deploy/` - Deployment-related files and shell scripts
-- `docs/` - Project documentation
-- `metadata/` - NFT metadata-related files
-- `build/` - Build artifacts
+## 📋 Project Structure
 
-For detailed information on the project structure, see [Project Structure](docs/project-structure.md).
+```
+├── contracts/               # Smart contracts
+│   ├── interfaces/          # Contract interfaces
+│   ├── adapters/            # Integration adapters
+│   └── mocks/               # Mock contracts for testing
+├── deploy/                  # Deployment scripts
+├── scripts/                 # Helper scripts
+├── cloud-functions/         # Off-chain notification & support services
+├── metadata/                # NFT and token metadata
+├── test/                    # Test scripts and mock contracts
+│   ├── helpers/             # Test helper functions
+│   ├── mocks/               # Mock contracts for testing
+│   └── unit/                # Unit tests grouped by contract
+└── docs/                    # Documentation
+```
 
-## Table of Contents
+## 🔑 Key Contracts
 
-### 1. Core Documentation
+### Core Contracts
 
-- [**Dragon Ecosystem Documentation**](docs/DRAGON_DOCUMENTATION.md) - Complete overview of the system architecture, components, and interactions
-- [**System Architecture Diagrams**](docs/DRAGON_SYSTEM_DIAGRAM.md) - Visual representations of the system components and flows
-- [**API Reference**](docs/DRAGON_API_REFERENCE.md) - Detailed API documentation for developers integrating with the ecosystem
-- [**Security Guide**](docs/security-keys.md) - Guidelines for managing API keys, private keys, and sensitive information
+- **Dragon.sol**: The core ERC20 token contract with burning and transfer fee mechanisms
+- **DragonLotterySwap.sol**: Base contract for lottery functionality that handles jackpot entries and winning mechanisms
+- **DragonShadowV3Swapper.sol**: Manages swapping operations between tokens with integrated jackpot and probability boosting
+- **ve69LP.sol**: Voting escrow contract for LP tokens allowing users to lock their LP for voting power
+- **ve69LPPoolVoting.sol**: Voting mechanism for ve69LP holders to allocate probability boosts
+- **DragonJackpotVault.sol**: Management contract for jackpot rewards distribution
+- **VRFValidator.sol**: Chainlink VRF implementation for provably fair randomness
 
-### 2. Deployment & Operations
+### Feature Contracts
 
-- [**Google Cloud Deployment Guide**](docs/DRAGON_GOOGLE_CLOUD_DEPLOYMENT.md) - Comprehensive guide for deploying and managing the ecosystem using Google Cloud
-- [**Testing Guide**](docs/DRAGON_TESTING_GUIDE.md) - Detailed guide for testing all contracts in the ecosystem
-- [**ConcreteDragonLotterySwap Implementation**](docs/CONCRETE_IMPLEMENTATION_EXAMPLE.md) - Example implementation of the concrete lottery contract
+- **GoldScratcher.sol**: NFT contract implementing scratch-to-win mechanics
+- **RedEnvelope.sol**: Community rewards and boost mechanism
+- **DelayedEntryCompensation.sol**: Handles compensation for delayed jackpot entries
+- **DragonPartnerRegistry.sol**: Registry for authorized partners in the ecosystem
+- **PromotionalItemRegistry.sol**: Manages promotional items that can boost lottery chances
 
-### 3. Smart Contracts
+## 💰 Tokenomics & Fee Structure
 
-The Dragon Ecosystem consists of the following main smart contracts:
+### $DRAGON Token
 
-- **Dragon.sol** - The main ERC20 token with fee distribution
-- **DragonLotterySwap.sol** - Abstract lottery system with multiple boost mechanisms
-- **ConcreteDragonLotterySwap.sol** - Concrete implementation of the lottery system
-- **ve69LP.sol** - Voting escrow token for governance
-- **ve69LPFeeDistributor.sol** - Distribution of fees to ve69LP holders
-- **GoldScratcher.sol** - NFT-based jackpot boost system
-- **PromotionalItemRegistry.sol** - Registry for promotional items
-- **RedEnvelope.sol** - Special rewards distribution system
-- **DragonExchangePair.sol** - Custom exchange pair for DRAGON token
-- **DragonJackpotVault.sol** - Management of the lottery jackpot
-- **DragonBeetsAdapter.sol** - Integration with Balancer/Beets
-- **DragonLPBooster.sol** - Boosts for liquidity providers
+- **Buy Fees** (10% total):
+  - 6.9% to jackpot
+  - 2.41% to ve69LP fee distributor
+  - 0.69% burned
 
-### 4. Key Features
+- **Sell Fees** (10% total):
+  - 6.9% to jackpot
+  - 2.41% to ve69LP fee distributor
+  - 0.69% burned
 
-- **Deflationary Token**: 10% fee on transactions with specific allocations
-- **Lottery System**: Win jackpots when swapping wrapped Sonic for DRAGON
-- **Governance**: Lock tokens for voting power and fee sharing
-- **Boosts**: Multiple mechanisms to increase win chances and rewards
+- **Transfer Fee**:
+  - 0.69% burned on all transfers
 
-### 5. Integration Guide
+### Lottery System
 
-For developers looking to integrate with the Dragon Ecosystem:
+- Lottery is triggered only when a user swaps $wS for $DRAGON
+- The user who executes the swap (tx.origin) is awarded, not aggregators or bots
+- Base win chance set to 0.04% with maximum win chance capped at 10%
+- Promotional items can boost winning probability up to 5x
+- GoldScratcher NFTs provide additional boosts to jackpot percentage
 
-1. Start with the [API Reference](docs/DRAGON_API_REFERENCE.md) to understand available functions
-2. Review the [System Architecture Diagrams](docs/DRAGON_SYSTEM_DIAGRAM.md) to understand component interactions
-3. For deployment, follow the [Google Cloud Deployment Guide](docs/DRAGON_GOOGLE_CLOUD_DEPLOYMENT.md)
-4. For testing, follow the [Testing Guide](docs/DRAGON_TESTING_GUIDE.md)
+### ve69LP Staking
 
-### 6. Security Measures
+- Lock LP tokens for voting power with longer lock periods granting more power
+- Use voting power to boost partner pools and increase lottery odds
+- Non-linear scaling function (cube root) for voting power multiplier
+- Pre-calculated maximum boost for gas optimization
 
-The Dragon Ecosystem implements several security features:
+## 🔄 Randomness & VRF Implementation
 
-- Paintswap VRF for verifiable randomness
-- Timelock mechanisms for parameter changes
-- Access control for critical functions
-- Reentrancy guards on sensitive operations
+- Chainlink VRF is the primary source of randomness
+- Fallback mechanism implemented for when VRF is unavailable
+- Security measures in the fallback:
+  - Uses tx.origin instead of msg.sender
+  - Requires tx.origin == msg.sender
+  - Requires tx.origin.code.length == 0
+- VRF coordinator (0x3ba925fdeae6b46d0bb4d424d829982cb2f7309e) is trusted
+- Retry mechanism for VRF requests when they fail
+- Entry may be delayed if VRF is unavailable
 
-## Getting Started
+## 🛠️ Setup & Installation
 
-1. Clone this repository
-2. Install dependencies with `npm install`
-3. Compile contracts with `npm run compile`
-4. Run tests with `npm test`
-5. For deployment, follow the [Deployment Guide](docs/DRAGON_GOOGLE_CLOUD_DEPLOYMENT.md)
+### Prerequisites
 
-## Testing
+- Node.js v16+ and npm
+- Hardhat
+- Foundry (for some tests)
 
-The Dragon Ecosystem includes comprehensive tests for all contracts. The testing approach is detailed in the [Testing Guide](docs/DRAGON_TESTING_GUIDE.md). Key aspects include:
+### Installation
 
-- Unit tests for individual contracts
-- Integration tests for contract interactions
-- Randomness testing for the VRF implementation
-- Mock contracts for external dependencies
+1. Clone the repository
+```bash
+git clone https://github.com/wenakita/reddragon.git
+cd SonicRedDragon
+```
 
-## Security
+2. Install dependencies
+```bash
+npm install
+```
 
-Security is a top priority for the Dragon Ecosystem. We have implemented several measures to protect sensitive information:
+3. Set up environment variables
+```bash
+cp .env.example .env
+# Edit .env with appropriate values
+```
 
-- Secure key management using Google Cloud Secret Manager
-- Multiple layers of protection for sensitive files
-- Proper `.gitignore` configuration to prevent accidental commitment of secrets
-- Example templates for all sensitive files
+### Compiling Contracts
 
-For more information on security practices and key management, see the [Security Guide](docs/security-keys.md).
+```bash
+npx hardhat compile
+```
 
-## License
+### Running Tests
+
+Run all tests:
+```bash
+npx hardhat test
+```
+
+Run specific test categories:
+```bash
+# Run interface tests
+npx hardhat test test/unit/interfaces/*.test.js
+
+# Run specific tests
+npx hardhat test test/unit/dragon/Dragon.test.js
+```
+
+### Deployment
+
+Deploy to local network:
+```bash
+npx hardhat run scripts/deploy.js
+```
+
+Deploy to Sonic Network:
+```bash
+npx hardhat run scripts/deploy.js --network sonic
+```
+
+## 🔐 Security Features
+
+The project implements several security measures:
+
+- Ownership and access control using OpenZeppelin's Ownable
+- Reentrancy protection in critical functions
+- SafeERC20 operations for token transfers
+- VRF-based randomness with fallback mechanisms
+- Emergency withdrawal functions
+- Function visibility optimization (internal functions for critical operations)
+- Proper checks for msg.sender vs tx.origin
+- Verification that critical functions can only be called by trusted contracts
+
+## 🔄 Contract Interactions
+
+### Core Flow
+
+1. **Token Swapping**: Users swap tokens through the DragonExchangeAdapter contract
+2. **Jackpot Entry**: Every buy transaction automatically enters the user into the jackpot
+3. **Probability Calculation**: Win chance is calculated based on:
+   - Base probability (0.04%)
+   - ve69LP holdings
+   - Applied promotions
+   - Partner boosts from voting
+4. **Winning Determination**: VRF provides randomness to determine winners
+5. **Reward Distribution**: Winners receive jackpot payouts in wS tokens
+
+### Promotional Items & Boosters
+
+1. **GoldScratcher**: NFTs that increase jackpot percentage (up to 15% increase)
+2. **Promotional Items**: Temporary boosts registered through the PromotionalItemRegistry
+3. **RedEnvelope**: Community reward mechanism with additional boosts
+
+## 📝 License
 
 MIT
 
----
+## 📚 Additional Resources
 
-For questions, support, or contributions, please contact the Dragon team. 
+- [Website](https://reddragon.finance)
+- [Telegram](https://t.me/sonicreddragon)
+- [Twitter](https://x.com/sonicreddragon)
+- [Documentation](docs/architecture.md) 
