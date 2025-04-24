@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+
+pragma solidity ^0.8.9;
 
 /**
  * @title IDragonLPBooster
- * @dev Interface for the DragonLPBooster contract that calculates boosts for LP providers
+ * @dev Interface for Dragon LP Booster contracts
+ * This interface defines the function to calculate boosts based on LP holdings
  */
 interface IDragonLPBooster {
     /**
-     * @dev Calculate boost for a user based on their LP position
+     * @dev Calculate the boost for a user
      * @param user Address of the user
-     * @return boost The calculated boost in basis points (e.g., 100 = 1%)
+     * @return Boost multiplier (in basis points)
      */
     function calculateBoost(address user) external view returns (uint256);
 } 

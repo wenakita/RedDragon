@@ -14,7 +14,7 @@ test/
 ├── mocks/               # Mock contracts for testing
 │   ├── tokens/          # Mock token implementations
 │   ├── core/            # Core mock contracts
-│   └── external/        # Mocks of external dependencies
+│   └── integrations/        # Mocks of external dependencies
 └── unit/                # Unit tests grouped by contract
     ├── interfaces/      # Interface tests
     ├── core/            # Core contract tests

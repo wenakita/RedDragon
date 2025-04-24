@@ -42,7 +42,7 @@ describe("DragonShadowV3Swapper Feature Flags", function () {
       mockQuoter.address,
       mockX33.address,
       mockToken.address, // beetsLp
-      mockToken.address, // ws
+      mockToken.address, // wrappedSonic
       mockToken.address, // usdc
       mockJackpot.address,
       mockToken.address, // ve69LP

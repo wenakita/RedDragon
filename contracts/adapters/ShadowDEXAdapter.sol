@@ -235,15 +235,37 @@ contract ShadowDEXAdapter is IDragonPartnerAdapter, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Estimate wS equivalent for a given token amount
-     * @param tokenIn Address of input token
+     * @dev Estimate the equivalent wS amount for a given input token and amount
+     * @param tokenIn The address of the input token
      * @param amountIn Amount of input tokens
      * @return Equivalent wS amount
      */
     function estimateWSEquivalent(
         address tokenIn,
         uint256 amountIn
-    ) external view override returns (uint256) {
+    ) external view returns (uint256) {
+        require(tokenIn == x33Token, "Only x33 token supported");
+        
+        // Calculate wS equivalent
+        uint256 wsEquivalent = calculateWSEquivalent(amountIn);
+        
+        // Adjust probability
+        wsEquivalent = (wsEquivalent * 69) / 100;
+        
+        return wsEquivalent;
+    }
+    
+    /**
+     * @dev Estimate the equivalent wrapped Sonic amount for a given input token and amount
+     * Implementation of IDragonPartnerAdapter interface function
+     * @param tokenIn The address of the input token
+     * @param amountIn Amount of input tokens
+     * @return Equivalent wrapped Sonic amount
+     */
+    function estimateWrappedSonicEquivalent(
+        address tokenIn,
+        uint256 amountIn
+    ) external view returns (uint256) {
         require(tokenIn == x33Token, "Only x33 token supported");
         
         // Calculate wS equivalent

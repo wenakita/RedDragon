@@ -7,56 +7,54 @@ pragma solidity ^0.8.9;
  */
 interface IDragonExchangePair {
     /**
-     * @dev Swap $wS tokens for $DRAGON tokens
-     * Implements the complete fee structure:
-     * - 9.31% of input $wS taken as fees (6.9% to jackpot, 2.41% to ve8020)
-     * - 0.69% of resulting $DRAGON burned
-     * @param user Address of the user performing the swap
-     * @param wsAmount Amount of $wS tokens being swapped
+     * @dev Swap wrapped Sonic tokens for $DRAGON tokens
+     * Applies the fee structure:
+     * - 9.31% of input wrapped Sonic taken as fees (6.9% to jackpot, 2.41% to ve8020)
+     * - 0.69% of output $DRAGON tokens burned
+     * @param user Address of the user swapping
+     * @param wrappedSonicAmount Amount of wrapped Sonic tokens being swapped
      * @return dragonAmount Amount of $DRAGON tokens returned to user
      */
-    function swapWSForDragon(address user, uint256 wsAmount) external returns (uint256 dragonAmount);
+    function swapWrappedSonicForDragon(address user, uint256 wrappedSonicAmount) external returns (uint256 dragonAmount);
     
     /**
-     * @dev Swap $DRAGON tokens for $wS tokens
-     * Implements the complete fee structure:
-     * - 0.69% of input $DRAGON burned
-     * - 9.31% of resulting $wS taken as fees (6.9% to jackpot, 2.41% to ve8020)
-     * @param user Address of the user performing the swap
+     * @dev Swap $DRAGON tokens for wrapped Sonic tokens
+     * Applies the fee structure:
+     * - 0.69% of input $DRAGON tokens burned
+     * - 9.31% of resulting wrapped Sonic taken as fees (6.9% to jackpot, 2.41% to ve8020)
+     * @param user Address of the user swapping
      * @param dragonAmount Amount of $DRAGON tokens being swapped
-     * @return wsAmount Amount of $wS tokens returned to user
+     * @return wrappedSonicAmount Amount of wrapped Sonic tokens returned to user
      */
-    function swapDragonForWS(address user, uint256 dragonAmount) external returns (uint256 wsAmount);
+    function swapDragonForWrappedSonic(address user, uint256 dragonAmount) external returns (uint256 wrappedSonicAmount);
     
     /**
-     * @dev Add liquidity to the pair
-     * @param wsAmount Amount of $wS tokens to add
+     * @dev Add liquidity to the exchange pair
+     * @param wrappedSonicAmount Amount of wrapped Sonic tokens to add
      * @param dragonAmount Amount of $DRAGON tokens to add
-     * @param user Address receiving the LP tokens
-     * @return liquidity Amount of LP tokens minted
+     * @return lpAmount Amount of LP tokens minted to user
      */
-    function addLiquidity(uint256 wsAmount, uint256 dragonAmount, address user) external returns (uint256 liquidity);
+    function addLiquidity(uint256 wrappedSonicAmount, uint256 dragonAmount) external returns (uint256 lpAmount);
     
     /**
-     * @dev Remove liquidity from the pair
-     * @param liquidity Amount of LP tokens to burn
-     * @param user Address receiving the tokens
-     * @return wsAmount Amount of $wS tokens returned
+     * @dev Remove liquidity from the exchange pair
+     * @param lpAmount Amount of LP tokens to burn
      * @return dragonAmount Amount of $DRAGON tokens returned
+     * @return wrappedSonicAmount Amount of wrapped Sonic tokens returned
      */
-    function removeLiquidity(uint256 liquidity, address user) external returns (uint256 wsAmount, uint256 dragonAmount);
+    function removeLiquidity(uint256 lpAmount) external returns (uint256 dragonAmount, uint256 wrappedSonicAmount);
     
     /**
-     * @dev Get the current reserves of the pair
-     * @return wsReserve Current $wS token reserve
+     * @dev Get current reserves of the trading pair
      * @return dragonReserve Current $DRAGON token reserve
+     * @return wrappedSonicReserve Current wrapped Sonic token reserve
      */
-    function getReserves() external view returns (uint256 wsReserve, uint256 dragonReserve);
+    function getReserves() external view returns (uint256 dragonReserve, uint256 wrappedSonicReserve);
     
     /**
-     * @dev Get the token addresses
-     * @return wsToken Address of the $wS token
+     * @dev Get addresses of the tokens in the pair
      * @return dragonToken Address of the $DRAGON token
+     * @return wrappedSonicToken Address of the wrapped Sonic token
      */
-    function getTokens() external view returns (address wsToken, address dragonToken);
+    function getTokens() external view returns (address dragonToken, address wrappedSonicToken);
 } 

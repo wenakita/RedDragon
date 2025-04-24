@@ -20,11 +20,11 @@ interface IDragonPartnerAdapter {
         address recipient
     ) external returns (
         uint256 amountOut,
-        uint256 wsEquivalent
+        uint256 wrappedSonicEquivalent
     );
     
     // Price estimation
-    function estimateWSEquivalent(
+    function estimateWrappedSonicEquivalent(
         address tokenIn,
         uint256 amountIn
     ) external view returns (uint256);

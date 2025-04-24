@@ -1,35 +1,32 @@
 // SPDX-License-Identifier: MIT
-// Fair, Verifiable, Simple: Ape the Dragon
-// https://x.com/sonicreddragon
-// https://t.me/sonicreddragon
-
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.20;
 
 /**
  * @title IDragonPaintSwapVRF
- * @dev Interface for the DragonPaintSwapVRF contract
+ * @dev Interface for the Dragon PaintSwap VRF implementation
  */
 interface IDragonPaintSwapVRF {
     /**
-     * @dev Request random number
-     * @return requestId The ID of the random number request
+     * @dev Request randomness from the VRF coordinator
+     * @return requestId The unique ID for this randomness request
      */
     function requestRandomness() external returns (bytes32);
-    function randomnessToRange(bytes32 requestId, uint256 range) external view returns (uint256);
-    function checkThreshold(bytes32 requestId, uint256 denominator, uint256 threshold) external view returns (bool);
-    function fulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) external;
     
     /**
-     * @dev Get the VRF configuration
-     * @return vrfCoordinator Address of the VRF coordinator
-     * @return keyHash VRF key hash
-     * @return subscriptionId VRF subscription ID
+     * @dev Get the VRF coordinator address
+     * @return The address of the VRF coordinator
      */
-    function getVRFConfiguration() external view returns (
-        address vrfCoordinator,
-        bytes32 keyHash,
-        uint64 subscriptionId
-    );
-
-    function isVrfEnabled() external view returns (bool);
+    function COORDINATOR() external view returns (address);
+    
+    /**
+     * @dev Get the VRF key hash
+     * @return The key hash used for VRF requests
+     */
+    function KEY_HASH() external view returns (bytes32);
+    
+    /**
+     * @dev Get the VRF subscription ID
+     * @return The subscription ID used for VRF requests
+     */
+    function SUBSCRIPTION_ID() external view returns (uint64);
 } 

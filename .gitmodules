@@ -1,3 +1,9 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "nft/dragon-nft-metadata"]
+	path = nft/dragon-nft-metadata
+	url = https://github.com/wenakita/RedDragon-NFT.git
+[submodule "test/forge-std"]
+	path = test/forge-std
+	url = https://github.com/foundry-rs/forge-std.git

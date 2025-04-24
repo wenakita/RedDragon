@@ -1,8 +1,16 @@
 require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-ethers");
 require("@nomicfoundation/hardhat-verify");
-require("dotenv").config();
+require("dotenv").config({ path: "./.env" }); // Load main .env file
 require("hardhat-gas-reporter");
+const path = require('path');
+const fs = require('fs');
+
+// Try to load deployment config .env if it exists
+const deploymentEnvPath = path.join(__dirname, "deployment", "config", ".env");
+if (fs.existsSync(deploymentEnvPath)) {
+  require("dotenv").config({ path: deploymentEnvPath });
+}
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -19,8 +27,8 @@ task("launch-red-dragon", "Launches RED DRAGON on Sonic Blockchain")
   .addFlag("skipVrf", "Skip VRF subscription funding")
   .setAction(async (taskArgs, hre) => {
     try {
-      // Import the script properly
-      const launchScript = require("./scripts/RED_DRAGON_LAUNCH_WIZARD.js");
+      // Import the script properly with updated path
+      const launchScript = require("./deployment/RED_DRAGON_LAUNCH_WIZARD.js");
       
       // Pass the hardhat runtime environment and task arguments to the script
       await launchScript(hre, taskArgs);
@@ -81,7 +89,7 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      sonic: "6CMN3IV9FZRHYFA1BPVGWCXUWCUUQG54J1" // Use the provided SonicScan API key
+      sonic: process.env.SONICSCAN_API_KEY || "6CMN3IV9FZRHYFA1BPVGWCXUWCUUQG54J1"
     },
     customChains: [
       {
