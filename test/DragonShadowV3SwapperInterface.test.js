@@ -21,7 +21,7 @@ describe("DragonShadowV3Swapper with Interface", function () {
       owner.address, // quoter address
       owner.address, // x33 token address
       owner.address, // beets lp token address
-      owner.address, // ws token address
+      owner.address, // wrappedSonic token address
       owner.address, // usdc token address
       owner.address, // jackpot address
       owner.address, // ve69LP address

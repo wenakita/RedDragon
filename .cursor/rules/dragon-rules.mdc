@@ -4,6 +4,7 @@ globs:
 alwaysApply: true
 ---
 # Dragon Project Rules
+- We are using Paintswap VRF.
 
 ## Randomness & VRF Implementation
 - VRF is the primary source of randomness.
@@ -46,3 +47,4 @@ alwaysApply: true
 ## Integration & External Systems
 - Use proper Beets (Balancer fork) integration variables for Sonic chain.
 - Ensure VRF subscription settings are correctly configured.
+

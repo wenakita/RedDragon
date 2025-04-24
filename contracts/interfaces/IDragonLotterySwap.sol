@@ -8,20 +8,20 @@ interface IDragonLotterySwap {
     /**
      * @dev Processes a buy and checks for lottery win
      * @param user Address of the user
-     * @param wsAmount Amount of wS tokens involved
+     * @param wrappedSonicAmount Amount of wrapped Sonic tokens involved
      */
-    function processBuy(address user, uint256 wsAmount) external;
+    function processBuy(address user, uint256 wrappedSonicAmount) external;
     
     /**
      * @dev Processes a sell transaction (potentially affecting global pity boost)
      * @param user Address of the user
-     * @param wsAmount Amount of wS tokens involved
+     * @param wrappedSonicAmount Amount of wrapped Sonic tokens involved
      */
-    function processSell(address user, uint256 wsAmount) external;
+    function processSell(address user, uint256 wrappedSonicAmount) external;
     
     /**
-     * @dev Increases the jackpot by depositing wS tokens
-     * @param amount Amount of wS tokens to add to the jackpot
+     * @dev Increases the jackpot by depositing wrapped Sonic tokens
+     * @param amount Amount of wrapped Sonic tokens to add to the jackpot
      */
     function addToJackpot(uint256 amount) external;
     
@@ -34,15 +34,15 @@ interface IDragonLotterySwap {
     
     /**
      * @dev Gets the current jackpot size
-     * @return Current jackpot size in wS
+     * @return Current jackpot size in wrapped Sonic
      */
-    function jackpot() external view returns (uint256);
+    function getJackpotSize() external view returns (uint256);
     
     /**
      * @dev Gets the current total accumulated boost
      * @return Current accumulated boost percentage
      */
-    function accumulatedWSBoost() external view returns (uint256);
+    function accumulatedWrappedSonicBoost() external view returns (uint256);
 
     /**
      * @dev Process random words from VRF
@@ -54,10 +54,10 @@ interface IDragonLotterySwap {
     /**
      * @dev Calculate win chance based on amount and user's voting power
      * @param user User address
-     * @param wsAmount wSonic amount
+     * @param wrappedSonicAmount wrapped Sonic amount
      * @return winChance Win chance in basis points (e.g., 100 = 1%)
      */
-    function calculateWinChance(address user, uint256 wsAmount) external view returns (uint256);
+    function calculateWinChance(address user, uint256 wrappedSonicAmount) external view returns (uint256);
     
     /**
      * @dev Enter the lottery on behalf of a user

@@ -10,13 +10,17 @@ describe("MockERC20", function () {
     [owner, user] = await ethers.getSigners();
 
     const MockERC20 = await ethers.getContractFactory("MockERC20");
-    mockToken = await MockERC20.deploy("Test Token", "TEST", ethers.utils.parseEther("1000000"));
+    mockToken = await MockERC20.deploy("Test Token", "TEST", 18);
     await mockToken.deployed();
+    
+    // Mint tokens to owner
+    await mockToken.mint(owner.address, ethers.utils.parseEther("1000000"));
   });
 
   it("should initialize with correct values", async function() {
     expect(await mockToken.name()).to.equal("Test Token");
     expect(await mockToken.symbol()).to.equal("TEST");
+    expect(await mockToken.decimals()).to.equal(18);
     expect(await mockToken.totalSupply()).to.equal(ethers.utils.parseEther("1000000"));
     expect(await mockToken.balanceOf(owner.address)).to.equal(ethers.utils.parseEther("1000000"));
   });

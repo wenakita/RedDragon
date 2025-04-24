@@ -16,7 +16,7 @@ describe("ve69LP", function () {
     [owner, user1, user2] = await ethers.getSigners();
 
     // Deploy the mock ERC20 token to represent the LP token
-    const MockERC20 = await ethers.getContractFactory("contracts/mocks/MockERC20.sol:MockERC20");
+    const MockERC20 = await ethers.getContractFactory("contracts/mocks/tokens/MockERC20.sol:MockERC20");
     tokenLP = await MockERC20.deploy("LP", "LP", 18);
     await tokenLP.deployed();
 
@@ -39,7 +39,7 @@ describe("ve69LP", function () {
     await tokenLP.connect(user2).approve(ve69LP.address, ethers.utils.parseEther("5000"));
 
     // Deploy the token contract
-    const Token = await ethers.getContractFactory("MockERC20");
+    const Token = await ethers.getContractFactory("contracts/mocks/tokens/MockERC20.sol:MockERC20");
     token = await Token.deploy("LP Token", "LP", 18);
     await token.deployed();
   });
@@ -435,7 +435,7 @@ describe("ve69LP", function () {
   describe("LP Token Management", function() {
     it("should allow owner to set LP token address after deployment", async function() {
       // Create a new LP token
-      const NewMockERC20 = await ethers.getContractFactory("contracts/mocks/MockERC20.sol:MockERC20");
+      const NewMockERC20 = await ethers.getContractFactory("contracts/mocks/tokens/MockERC20.sol:MockERC20");
       const newLpToken = await NewMockERC20.deploy("New LP", "NLP", 18);
       await newLpToken.deployed();
       
@@ -448,7 +448,7 @@ describe("ve69LP", function () {
     
     it("should not allow non-owner to set LP token address", async function() {
       // Create a new LP token
-      const NewMockERC20 = await ethers.getContractFactory("contracts/mocks/MockERC20.sol:MockERC20");
+      const NewMockERC20 = await ethers.getContractFactory("contracts/mocks/tokens/MockERC20.sol:MockERC20");
       const newLpToken = await NewMockERC20.deploy("New LP", "NLP", 18);
       await newLpToken.deployed();
       
@@ -472,7 +472,7 @@ describe("ve69LP", function () {
       await ve69LP.connect(user1).createLock(lockAmount, lockTime);
       
       // Create a new LP token
-      const NewMockERC20 = await ethers.getContractFactory("contracts/mocks/MockERC20.sol:MockERC20");
+      const NewMockERC20 = await ethers.getContractFactory("contracts/mocks/tokens/MockERC20.sol:MockERC20");
       const newLpToken = await NewMockERC20.deploy("New LP", "NLP", 18);
       await newLpToken.deployed();
       

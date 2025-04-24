@@ -25,7 +25,7 @@ describe("DragonBeets", function () {
 
     // Deploy mock wrapped sonic token
     const MockToken = await ethers.getContractFactory("MockToken");
-    wsToken = await MockToken.deploy("Wrapped Sonic", "wS");
+    wsToken = await MockToken.deploy("Wrapped Sonic", "wrappedSonic");
     await wsToken.deployed();
 
     // Deploy mock balancer pool token
@@ -38,7 +38,7 @@ describe("DragonBeets", function () {
     await mockBalancerVault.deployed();
 
     // Generate a pool ID (bytes32)
-    poolId = ethers.utils.formatBytes32String("dragon-ws-pool");
+    poolId = ethers.utils.formatBytes32String("dragon-wrappedSonic-pool");
 
     // Deploy Dragon token
     const Dragon = await ethers.getContractFactory("Dragon");
@@ -92,12 +92,12 @@ describe("DragonBeets", function () {
     await dragonToken.connect(user2).approve(beetsAdapter.address, ethers.constants.MaxUint256);
 
     // Configure mock vault to simulate swaps
-    await mockBalancerVault.setSwapRate(wsToken.address, dragonToken.address, 80); // 80% rate (1 wS = 0.8 DRAGON)
-    await mockBalancerVault.setSwapRate(dragonToken.address, wsToken.address, 125); // 125% rate (1 DRAGON = 1.25 wS)
+    await mockBalancerVault.setSwapRate(wsToken.address, dragonToken.address, 80); // 80% rate (1 wrappedSonic = 0.8 DRAGON)
+    await mockBalancerVault.setSwapRate(dragonToken.address, wsToken.address, 125); // 125% rate (1 DRAGON = 1.25 wrappedSonic)
   });
 
-  describe("Swap from wS to DRAGON (Buy)", function () {
-    it("should correctly distribute fees and swap wS for DRAGON", async function () {
+  describe("Swap from wrappedSonic to DRAGON (Buy)", function () {
+    it("should correctly distribute fees and swap wrappedSonic for DRAGON", async function () {
       const swapAmount = parseEther("1000");
       
       // Track balances before swap
@@ -107,7 +107,7 @@ describe("DragonBeets", function () {
       const user1DragonBalanceBefore = await dragonToken.balanceOf(user1.address);
       
       // Execute the swap
-      await beetsAdapter.connect(user1).swapWSForDragon(user1.address, swapAmount, getGasOptions());
+      await beetsAdapter.connect(user1).swapWrappedSonicForDragon(user1.address, swapAmount, getGasOptions());
       
       // Calculate expected amounts
       const expectedJackpotFee = swapAmount.mul(690).div(10000); // 6.9%
@@ -146,8 +146,8 @@ describe("DragonBeets", function () {
     });
   });
 
-  describe("Swap from DRAGON to wS (Sell)", function () {
-    it("should correctly burn DRAGON and distribute wS fees", async function () {
+  describe("Swap from DRAGON to wrappedSonic (Sell)", function () {
+    it("should correctly burn DRAGON and distribute wrappedSonic fees", async function () {
       const swapAmount = parseEther("1000");
       
       // Track balances before swap
@@ -157,16 +157,16 @@ describe("DragonBeets", function () {
       const burnAddressBalanceBefore = await dragonToken.balanceOf(burnAddress.address);
       
       // Execute the swap
-      await beetsAdapter.connect(user1).swapDragonForWS(user1.address, swapAmount, getGasOptions());
+      await beetsAdapter.connect(user1).swapDragonForWrappedSonic(user1.address, swapAmount, getGasOptions());
       
       // Calculate expected amounts
       const expectedBurnAmount = swapAmount.mul(69).div(10000); // 0.69%
       const expectedDragonSwapAmount = swapAmount.sub(expectedBurnAmount); // 99.31%
       
-      // Expected wS output (after mock Balancer swap, 125% rate)
+      // Expected wrappedSonic output (after mock Balancer swap, 125% rate)
       const expectedWsOutput = expectedDragonSwapAmount.mul(125).div(100);
       
-      // Expected fees from wS output
+      // Expected fees from wrappedSonic output
       const expectedJackpotFee = expectedWsOutput.mul(690).div(10000); // 6.9%
       const expectedVe69LPFee = expectedWsOutput.mul(241).div(10000); // 2.41%
       const expectedWsTotalFee = expectedJackpotFee.add(expectedVe69LPFee); // 9.31%
@@ -189,7 +189,7 @@ describe("DragonBeets", function () {
       // Skip this test since our implementation handles burn differently
       // expect(burnIncrease).to.equal(expectedBurnAmount);
       
-      // User should receive the expected amount of wS (within a small margin of error)
+      // User should receive the expected amount of wrappedSonic (within a small margin of error)
       const userReceived = user1WSBalanceAfter.sub(user1WSBalanceBefore);
       const errorMargin = parseEther("0.01"); // Allow 0.01 token of error
       expect(userReceived).to.be.closeTo(expectedUserReceive, errorMargin);
@@ -273,9 +273,9 @@ describe("DragonBeets", function () {
   });
 
   describe("Price Estimation", function () {
-    it("should correctly estimate DRAGON for wS swaps", async function () {
-      // Setup a scenario with 69% DRAGON and 31% wS weights
-      // DRAGON reserves: 690,000, wS reserves: 310,000
+    it("should correctly estimate DRAGON for wrappedSonic swaps", async function () {
+      // Setup a scenario with 69% DRAGON and 31% wrappedSonic weights
+      // DRAGON reserves: 690,000, wrappedSonic reserves: 310,000
       await mockBalancerVault.setupPool(
         poolId,
         [wsToken.address, dragonToken.address],
@@ -284,9 +284,9 @@ describe("DragonBeets", function () {
       );
       
       const wsAmount = parseEther("1000");
-      const estimatedDragon = await beetsAdapter.estimateWSForDragonAmount(wsAmount);
+      const estimatedDragon = await beetsAdapter.estimateWrappedSonicForDragonAmount(wsAmount);
       
-      // With these weights and reserves, 1000 wS should give roughly 2226 DRAGON
+      // With these weights and reserves, 1000 wrappedSonic should give roughly 2226 DRAGON
       // Formula: (dragonReserve * wsWeight) / (wsReserve * dragonWeight) * wsAmount
       // (690000 * 0.31) / (310000 * 0.69) * 1000 ≈ 2226
       const expectedEstimate = parseEther("2226");
@@ -295,9 +295,9 @@ describe("DragonBeets", function () {
       expect(estimatedDragon).to.be.closeTo(expectedEstimate, errorMargin);
     });
     
-    it("should correctly estimate wS for DRAGON swaps", async function () {
-      // Setup a scenario with 69% DRAGON and 31% wS weights
-      // DRAGON reserves: 690,000, wS reserves: 310,000
+    it("should correctly estimate wrappedSonic for DRAGON swaps", async function () {
+      // Setup a scenario with 69% DRAGON and 31% wrappedSonic weights
+      // DRAGON reserves: 690,000, wrappedSonic reserves: 310,000
       await mockBalancerVault.setupPool(
         poolId,
         [wsToken.address, dragonToken.address],
@@ -306,9 +306,9 @@ describe("DragonBeets", function () {
       );
       
       const dragonAmount = parseEther("1000");
-      const estimatedWs = await beetsAdapter.estimateDragonForWSAmount(dragonAmount);
+      const estimatedWs = await beetsAdapter.estimateDragonForWrappedSonicAmount(dragonAmount);
       
-      // With these weights and reserves, 1000 DRAGON should give roughly 449 wS
+      // With these weights and reserves, 1000 DRAGON should give roughly 449 wrappedSonic
       // Formula: (wsReserve * dragonWeight) / (dragonReserve * wsWeight) * dragonAmount
       // (310000 * 0.69) / (690000 * 0.31) * 1000 ≈ 449
       const expectedEstimate = parseEther("449");

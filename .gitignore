@@ -1,45 +1,106 @@
-# Node
+# Node artifacts
 node_modules/
+.next/
+dist/
+build/
 npm-debug.log
-package-lock.json
-
-# Hardhat
-artifacts/
-cache/
-coverage/
-coverage.json
-.openzeppelin/
+yarn-error.log
+.parcel-cache/
 
 # Environment variables
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# IDEs and editors
+# IDE files
 .idea/
 .vscode/
-*.swp
-*.swo
-
-# OS
+*.code-workspace
 .DS_Store
-Thumbs.db
+
+# Hardhat files
+cache/
+artifacts/
+typechain/
+typechain-types/
+
+# Sensitive files - NEVER COMMIT THESE!
+private_key.txt
+api_key.txt
+**/private_key.txt
+**/api_key.txt
+secret.json
+secrets.json
+
+# Project backup
+backup/
+keystore*.json
+
+# Deployment backups - contain sensitive data
+
+# Ignore deployment scripts and integrations (do not commit)
+/deployment/
+/integrations/
+
+# Ignore config folders that may contain secrets
+/deployment/config/
+
+# Explicitly ignore any .env, key, or secret files anywhere
+*.env
+*.key
+*.pem
+*.crt
+*.p12
+*.cer
+*.der
+*.jks
+*.keystore
+*.gpg
+*.asc
+
+# Do not commit any scripts or files in deployment/ or integrations/
+
+.backup-*/
+.backup-configs-*/
+*-backup/
+backup-*/
+backup/
+backups/
+
+# Contract info
+contract-addresses.json
+
+# Build artifacts
+out/
+*.o
+*.log
+
+# Cursor
+.cursor/
+
+# Security (as a precaution)
+*private*
+*secret*
+*wallet*
+*key*
+
+# Hardhat
+coverage/
+coverage.json
+.openzeppelin/
 
 # Deployment
 deployed-addresses.json
 deployment.log
 deploy/config/*
 **/deployment-files/
-**/api_key.txt
-**/private_key.txt
-**/*_key.txt
-**/*_keys.txt
 **/apikey*.txt
 **/secrets/
 **/credentials/
 
 # Testing
-*.log
 gas-report.txt
 
 # Misc
