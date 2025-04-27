@@ -1,0 +1,9 @@
+[
+  {"name": "token_id", "type": "INTEGER", "mode": "REQUIRED"},
+  {"name": "owner", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "original_user", "type": "STRING", "mode": "REQUIRED"},
+  {"name": "swap_amount", "type": "NUMERIC", "mode": "REQUIRED", "precision": "38", "scale": "9"},
+  {"name": "timestamp", "type": "TIMESTAMP", "mode": "REQUIRED"},
+  {"name": "redeemed", "type": "BOOLEAN", "mode": "REQUIRED"},
+  {"name": "redemption_timestamp", "type": "TIMESTAMP", "mode": "NULLABLE"}
+]
