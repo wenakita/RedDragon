@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "telegraf": "^4.16.2",
-    "@google-cloud/secret-manager": "^4.2.2"
+    "@google-cloud/secret-manager": "^6.0.1"
   }
 }
