@@ -52,7 +52,6 @@ contract MockBalancerWeightedPoolV3 {
         bpt = new MockBalancerPoolToken(
             _name,
             _symbol,
-            poolId,
             _vault
         );
     }

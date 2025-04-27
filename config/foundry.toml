@@ -1,0 +1,22 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["node_modules"]
+remappings = [
+    "@arbitrum/=node_modules/@arbitrum/",
+    "@axelar-network/=node_modules/@axelar-network/",
+    "@chainlink/=node_modules/@chainlink/",
+    "@ensdomains/=node_modules/@ensdomains/",
+    "@eth-optimism/=node_modules/@eth-optimism/",
+    "@ethereum-waffle/=node_modules/@ethereum-waffle/",
+    "@layerzerolabs/=node_modules/@layerzerolabs/",
+    "@offchainlabs/=node_modules/@offchainlabs/",
+    "@openzeppelin/=node_modules/@openzeppelin/",
+    "@scroll-tech/=node_modules/@scroll-tech/",
+    "@zksync/=node_modules/@zksync/",
+    "hardhat-deploy/=node_modules/hardhat-deploy/",
+    "hardhat/=node_modules/hardhat/",
+    "solidity-bytes-utils/=node_modules/solidity-bytes-utils/",
+]
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

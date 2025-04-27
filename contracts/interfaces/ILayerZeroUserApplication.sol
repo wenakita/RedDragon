@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
+
+/**
+ * @title ILayerZeroUserApplication
+ * @notice Interface for LayerZero user applications that handle both sending and receiving messages
+ */
+interface ILayerZeroUserApplication {
+    /**
+     * @notice LayerZero endpoint will invoke this function to deliver the message on the destination
+     * @param _srcChainId - the source endpoint identifier
+     * @param _srcAddress - the source sending contract address from the source chain
+     * @param _nonce - the ordered message nonce
+     * @param _payload - the signed payload is the UA bytes has encoded to be sent
+     */
+    function lzReceive(uint16 _srcChainId, bytes calldata _srcAddress, uint64 _nonce, bytes calldata _payload) external;
+
+    /**
+     * @notice Send a message to another chain through LayerZero
+     * @param _dstChainId - the destination chain identifier
+     * @param _payload - the payload to be sent
+     */
+    function send(uint16 _dstChainId, bytes calldata _payload) external payable;
+} 

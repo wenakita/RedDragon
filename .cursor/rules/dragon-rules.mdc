@@ -4,25 +4,20 @@ globs:
 alwaysApply: true
 ---
 # Dragon Project Rules
-- We are using Paintswap VRF.
-
-## Randomness & VRF Implementation
-- VRF is the primary source of randomness.
-- Fallback should only be used when VRF is unavailable.
-- Never use msg.sender in the fallback.
-- Use tx.origin instead of msg.sender in the fallback.
-- Add require(tx.origin == msg.sender) to the fallback.
-- Add require(tx.origin.code.length == 0) to the fallback.
-- The VRF coordinator (0x3ba925fdeae6b46d0bb4d424d829982cb2f7309e) must be trusted.
-- Implement a retry mechanism for VRF requests when they fail.
-- Consider delaying the entry if the VRF is unavailable.
-- No predictable randomness sources should be used.
 
 ## Function Visibility & Security
-- processBuy, processSwapWithScratcher, processSwapWithPromotion, processEntry must be internal.
-- registerWinningScratcher should only be callable by goldScratcher.
-- Be cautious with msg.sender usage throughout the codebase.
-- Storage variables in the PaintSwap VRF implementation should default to 0.
+- `processBuy`, `processSwapWithScratcher`, `processSwapWithPromotion`, `processEntry` must be internal.
+- `registerWinningScratcher` should only be callable by goldScratcher.
+- Be cautious with `msg.sender` usage throughout the codebase.
+
+## Contract Inheritance & Interface Compliance
+- Use OpenZeppelin 4.9.0+ contracts for compatibility with Solidity 0.8.20.
+- Ensure the Ownable constructor is properly called with no arguments.
+- Verify IDragon interface functions are properly implemented in Dragon.sol.
+- Ensure all `override` keywords match actual parent functions.
+- Remove `override` from functions that don't override anything.
+- When using `super` calls, verify the function exists in parent contracts.
+- Avoid multiple inheritance conflicts with clear override specifications.
 
 ## Configuration
 - Use a consistent naming standard: $DRAGON token should have a single variable reference.
@@ -32,19 +27,25 @@ alwaysApply: true
 
 ## Mathematical Improvements
 - Use a non-linear scaling function (cube root) for the voting power multiplier.
-- Make maxVP configurable or adjust based on real-world data.
+- Make `maxVP` configurable or adjust based on real-world data.
 - Pre-calculate the maximum boost for gas optimization.
 - Refactor the boost capping logic to be more efficient.
 
 ## Tokenomics & Fee Structure
 - A 10% fee is applied to all buys and sells of $DRAGON.
-- Buy fees are distributed: 6.9% to jackpot, 2.41% to ve69LPfeedistributor.
-- Sell fees are distributed: 6.9% to jackpot, 2.41% to ve69LPfeedistributor.
-- The lottery is triggered only when a user swaps $wS for $DRAGON.
-- The user who executes the swap (tx.origin) is awarded, not aggregators or bots.
-- 0.69% of $DRAGON is burned for all transfers.
+- Buy fees are distributed: 
+  - 6.9% to jackpot
+  - 2.41% to ve69LPfeedistributor
+- Sell fees are distributed: 
+  - 6.9% to jackpot
+  - 2.41% to ve69LPfeedistributor
+- The lottery is triggered only when a user swaps wS for DRAGON.
+- The user who executes the swap (`tx.origin`) is awarded, not aggregators or bots.
+- 0.69% of DRAGON is burned for all transfers.
 
 ## Integration & External Systems
 - Use proper Beets (Balancer fork) integration variables for Sonic chain.
 - Ensure VRF subscription settings are correctly configured.
+- Verify interface compatibility with all integrated contracts.
+- Test cross-contract interactions thoroughly before deployment.
 

@@ -1,0 +1,209 @@
+{
+  "bindings": [
+    {
+      "members": [
+        "group:gcp-billing-admins@sonicreddragon.io"
+      ],
+      "role": "roles/billing.admin"
+    },
+    {
+      "members": [
+        "group:gcp-billing-admins@sonicreddragon.io"
+      ],
+      "role": "roles/billing.creator"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io"
+      ],
+      "role": "roles/billing.user"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io",
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/cloudkms.admin"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io"
+      ],
+      "role": "roles/cloudsupport.admin"
+    },
+    {
+      "members": [
+        "group:gcp-hybrid-connectivity-admins@sonicreddragon.io",
+        "group:gcp-vpc-network-admins@sonicreddragon.io"
+      ],
+      "role": "roles/compute.networkAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-vpc-network-admins@sonicreddragon.io"
+      ],
+      "role": "roles/compute.securityAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/compute.viewer"
+    },
+    {
+      "members": [
+        "group:gcp-vpc-network-admins@sonicreddragon.io"
+      ],
+      "role": "roles/compute.xpnAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/container.viewer"
+    },
+    {
+      "members": [
+        "serviceAccount:service-org-410736269859@gcp-sa-ktd-hpsa.iam.gserviceaccount.com"
+      ],
+      "role": "roles/containerthreatdetection.serviceAgent"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io"
+      ],
+      "role": "roles/iam.organizationRoleAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/iam.organizationRoleViewer"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/iam.securityAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/iam.securityReviewer"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/iam.serviceAccountCreator"
+    },
+    {
+      "members": [
+        "group:gcp-logging-monitoring-admins@sonicreddragon.io",
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/logging.admin"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/logging.configWriter"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/logging.privateLogViewer"
+    },
+    {
+      "members": [
+        "group:gcp-logging-monitoring-viewers@sonicreddragon.io"
+      ],
+      "role": "roles/logging.viewer"
+    },
+    {
+      "members": [
+        "group:gcp-logging-monitoring-admins@sonicreddragon.io",
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/monitoring.admin"
+    },
+    {
+      "members": [
+        "group:gcp-logging-monitoring-viewers@sonicreddragon.io"
+      ],
+      "role": "roles/monitoring.viewer"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io",
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/orgpolicy.policyAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-logging-monitoring-admins@sonicreddragon.io",
+        "group:gcp-organization-admins@sonicreddragon.io"
+      ],
+      "role": "roles/pubsub.admin"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io"
+      ],
+      "role": "roles/resourcemanager.folderAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/resourcemanager.folderIamAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-devops@sonicreddragon.io",
+        "group:gcp-hybrid-connectivity-admins@sonicreddragon.io",
+        "group:gcp-vpc-network-admins@sonicreddragon.io"
+      ],
+      "role": "roles/resourcemanager.folderViewer"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io",
+        "user:akita@sonicreddragon.io"
+      ],
+      "role": "roles/resourcemanager.organizationAdmin"
+    },
+    {
+      "members": [
+        "group:gcp-billing-admins@sonicreddragon.io"
+      ],
+      "role": "roles/resourcemanager.organizationViewer"
+    },
+    {
+      "members": [
+        "domain:sonicreddragon.io",
+        "group:gcp-organization-admins@sonicreddragon.io"
+      ],
+      "role": "roles/resourcemanager.projectCreator"
+    },
+    {
+      "members": [
+        "group:gcp-organization-admins@sonicreddragon.io",
+        "group:gcp-security-admins@sonicreddragon.io"
+      ],
+      "role": "roles/securitycenter.admin"
+    },
+    {
+      "members": [
+        "serviceAccount:service-org-410736269859@security-center-api.iam.gserviceaccount.com"
+      ],
+      "role": "roles/securitycenter.serviceAgent"
+    }
+  ],
+  "etag": "BwYzRTbXagg=",
+  "version": 1
+} 

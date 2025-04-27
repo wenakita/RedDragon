@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /**
  * @title IShadowSwapRouter
- * @dev Interface for Shadow DEX's SwapRouter (Uniswap V3 fork)
+ * @dev Interface for Shadow DEX's Uniswap V3 style swap router
  */
 interface IShadowSwapRouter {
     struct ExactInputSingleParams {
@@ -17,10 +17,12 @@ interface IShadowSwapRouter {
         uint160 sqrtPriceLimitX96;
     }
 
-    /// @notice Swaps `amountIn` of one token for as much as possible of another token
-    /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata
-    /// @return amountOut The amount of the received token
-    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+    /**
+     * @dev Swaps `amountIn` of one token for as much as possible of another token
+     * @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams`
+     * @return amountOut The amount of the received token
+     */
+    function exactInputSingle(ExactInputSingleParams calldata params) external returns (uint256 amountOut);
 
     struct ExactInputParams {
         bytes path;
@@ -30,10 +32,12 @@ interface IShadowSwapRouter {
         uint256 amountOutMinimum;
     }
 
-    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
-    /// @return amountOut The amount of the received token
-    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
+    /**
+     * @dev Swaps `amountIn` of one token for as much as possible of another along the specified path
+     * @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams`
+     * @return amountOut The amount of the received token
+     */
+    function exactInput(ExactInputParams calldata params) external returns (uint256 amountOut);
 
     struct ExactOutputSingleParams {
         address tokenIn;
@@ -46,10 +50,12 @@ interface IShadowSwapRouter {
         uint160 sqrtPriceLimitX96;
     }
 
-    /// @notice Swaps as little as possible of one token for `amountOut` of another token
-    /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in calldata
-    /// @return amountIn The amount of the input token
-    function exactOutputSingle(ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn);
+    /**
+     * @dev Swaps as little as possible of one token for `amountOut` of another token
+     * @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams`
+     * @return amountIn The amount of the input token
+     */
+    function exactOutputSingle(ExactOutputSingleParams calldata params) external returns (uint256 amountIn);
 
     struct ExactOutputParams {
         bytes path;
@@ -59,8 +65,10 @@ interface IShadowSwapRouter {
         uint256 amountInMaximum;
     }
 
-    /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata
-    /// @return amountIn The amount of the input token
-    function exactOutput(ExactOutputParams calldata params) external payable returns (uint256 amountIn);
+    /**
+     * @dev Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
+     * @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams`
+     * @return amountIn The amount of the input token
+     */
+    function exactOutput(ExactOutputParams calldata params) external returns (uint256 amountIn);
 } 
