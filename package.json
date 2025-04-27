@@ -41,7 +41,7 @@
     "@layerzerolabs/lz-evm-protocol-v2": "^3.0.88",
     "@layerzerolabs/oapp-evm": "^0.3.2",
     "@openzeppelin/contracts-upgradeable": "^4.8.0",
-    "axios": "^1.8.4",
+    "axios": "^1.9.0",
     "chalk": "^4.1.2",
     "dotenv": "^16.5.0",
     "form-data": "^4.0.2",
