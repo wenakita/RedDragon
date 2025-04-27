@@ -5,9 +5,11 @@ import "forge-std/Test.sol";
 
 contract SimpleTest is Test {
     function setUp() public {
+        // Setup code (if needed)
     }
-
-    function testSimple() public {
+    
+    function testExample() public {
+        // A simple passing test
         assertTrue(true);
     }
 } 

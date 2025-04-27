@@ -22,9 +22,16 @@ yarn-error.log
 
 # Hardhat files
 cache/
+cache-cc/
+cache_temp/
+cache_test/
 artifacts/
+artifacts-cc/
+artifacts_temp/
+artifacts_test/
 typechain/
 typechain-types/
+out/
 
 # Sensitive files - NEVER COMMIT THESE!
 private_key.txt
@@ -103,6 +110,13 @@ deploy/config/*
 
 # Testing
 gas-report.txt
+
+# Temp files
+*temp*
+*_temp*
+*.tmp
+*-temp.js
+*.backup
 
 # Misc
 .notes
