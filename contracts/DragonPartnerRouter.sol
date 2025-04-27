@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ================================
+ *      DRAGON PARTNER ROUTER
+ *   ================================
+ *     Unified Partner Integration
+ *   ================================
+ *
+ * // "You don't know who you're messing with. I'm Michael Jackson!" - Kenny (Lee's cousin)
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";

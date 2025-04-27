@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ===============================
+ *       SONIC VRF RECEIVER
+ *   ===============================
+ *      Cross-Chain Randomness
+ *   ===============================
+ *
+ * // "I'll slap you so hard your ancestors will feel it!" - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/access/Ownable.sol";

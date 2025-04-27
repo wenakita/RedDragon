@@ -1,6 +1,18 @@
 // SPDX-License-Identifier: MIT
 
 /**
+ *   =============================
+ *         VRF VALIDATOR
+ *   =============================
+ *     Randomness Verification
+ *   =============================
+ *
+ * // "Wipe yourself off, you dead." - Hu Li
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
+/**
  * @title VRFValidator
  * @dev Utility contract to validate Chainlink VRF integration
  *

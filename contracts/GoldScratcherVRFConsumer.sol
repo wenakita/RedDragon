@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ===================================
+ *      GOLD SCRATCHER VRF CONSUMER
+ *   ===================================
+ *        Scratcher RNG Generator
+ *   ===================================
+ *
+ * // "I like my women like I like my coffee... I don't like coffee." - Steven Reign (Casino Owner)
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";

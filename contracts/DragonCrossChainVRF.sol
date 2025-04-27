@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ===================================
+ *       DRAGON CROSS-CHAIN VRF
+ *   ===================================
+ *      Multi-Chain Lottery System
+ *   ===================================
+ *
+ * // "That's my favorite part!" - Isabella (The girl at the massage parlor)
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/access/Ownable.sol";

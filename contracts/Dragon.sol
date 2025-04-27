@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   =============================
+ *            DRAGON
+ *   =============================
+ *       Tokenomics Contract
+ *   =============================
+ *
+ * // "You ain't gonna catch no crook in a $2 yellow cab!" - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -146,17 +159,19 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard, IDragon, ERC20Burnable {
     event TokensBurned(uint256 amount);
 
     /**
-     * @dev Constructor
-     * @param name_ Token name
-     * @param symbol_ Token symbol
+     * @dev Constructor to initialize the Dragon token
+     * @param name_ Name of the token
+     * @param symbol_ Symbol of the token
+     * @param initialSupply Initial supply of tokens
      * @param _jackpotVault Address of the jackpot vault
      * @param _ve69LPFeeDistributor Address of the ve69LP fee distributor
-     * @param _wrappedSonicAddress Address of the wrapped Sonic token
-     * @param _multisigAddress Address of the multisig wallet
+     * @param _wrappedSonicAddress Address of the wS token
+     * @param _multisigAddress Address of the multisig
      */
     constructor(
         string memory name_,
         string memory symbol_,
+        uint256 initialSupply,
         address _jackpotVault,
         address _ve69LPFeeDistributor,
         address _wrappedSonicAddress,
@@ -568,94 +583,131 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard, IDragon, ERC20Burnable {
     }
 
     /**
-     * @dev Processes a buy transaction (internal function)
-     * @param user User address
-     * @param wrappedSonicAmount wS amount
+     * @dev Internal function to process a buy transaction with fees
+     * @param user Address of the user who is buying
+     * @param wrappedSonicAmount Amount of wrapped Sonic tokens involved
      */
     function processBuy(address user, uint256 wrappedSonicAmount) internal {
-        if (lotteryAddress != address(0) && user == tx.origin) {
-            // Only trigger lottery on valid swaps and for actual user (not contracts)
-            IDragonLotterySwap lottery = IDragonLotterySwap(lotteryAddress);
-            lottery.secureProcessBuy(user, wrappedSonicAmount);
+        require(user != address(0), "Invalid user address");
+        require(wrappedSonicAmount > 0, "Amount must be greater than 0");
+        
+        // Calculate jackpot fee (6.9%)
+        uint256 jackpotFee = (wrappedSonicAmount * buyFees.jackpotFee) / 10000;
+        
+        // Calculate ve69LP fee (2.41%)
+        uint256 ve69LPFee = (wrappedSonicAmount * buyFees.ve69LPFee) / 10000;
+        
+        // Transfer fees
+        if (jackpotFee > 0) {
+            wrappedSonic.safeTransferFrom(user, jackpotVault, jackpotFee);
+            IDragonJackpotVault(jackpotVault).addToJackpot(jackpotFee);
+            emit FeeTransferred(jackpotVault, jackpotFee, "Jackpot");
+        }
+        
+        if (ve69LPFee > 0) {
+            wrappedSonic.safeTransferFrom(user, ve69LPFeeDistributor, ve69LPFee);
+            Ive69LPFeeDistributor(ve69LPFeeDistributor).addToDistribution(ve69LPFee);
+            emit FeeTransferred(ve69LPFeeDistributor, ve69LPFee, "ve69LP");
         }
     }
 
     /**
-     * @dev Processes a swap with a scratcher (internal function)
-     * @param user User address
-     * @param wrappedSonicAmount wS amount
-     * @param scratcherId Scratcher ID
+     * @dev Process swap with gold scratcher
+     * @param user Address of the user
+     * @param scratcherId ID of the scratcher
      */
-    function processSwapWithScratcher(address user, uint256 wrappedSonicAmount, uint256 scratcherId) internal {
-        // Check if scratcher is valid and apply boost if appropriate
-        if (goldScratcherAddress != address(0) && scratcherId > 0) {
-            // Apply scratcher boost logic would go here
+    function processSwapWithScratcher(address user, uint256 scratcherId) internal {
+        require(user != address(0), "Invalid user address");
+        require(winningScratcherIds[scratcherId], "Invalid scratcher ID");
+        
+        // Process transaction with lottery entry
+        if (lotteryAddress != address(0)) {
+            IDragonLotterySwap(lotteryAddress).processBuy(user, 0);
         }
         
-        // Process base buy after scratcher logic
-        processBuy(user, wrappedSonicAmount);
+        // Remove the scratcher ID from winning IDs list
+        winningScratcherIds[scratcherId] = false;
     }
 
     /**
-     * @dev Processes a swap with a promotion (internal function)
-     * @param user User address
-     * @param wrappedSonicAmount wS amount
-     * @param promotionalItem Promotional item interface
-     * @param itemId Item ID
+     * @dev Process swap with promotional item
+     * @param user Address of the user
+     * @param promotionalItem Address of the promotional item contract
+     * @param tokenId ID of the promotional item token
      */
-    function processSwapWithPromotion(
-        address user,
-        uint256 wrappedSonicAmount,
-        IPromotionalItem promotionalItem,
-        uint256 itemId
-    ) internal {
-        // Apply promotional item boost if valid
-        if (address(promotionalItem) != address(0) && itemId > 0) {
-            // Apply promotion boost logic here
-            (bool success, uint256 boostedAmount) = promotionalItem.applyItem(itemId, user, wrappedSonicAmount);
-            if (success) {
-                // Use boosted amount for lottery entry
-                wrappedSonicAmount = boostedAmount;
-            }
-        }
+    function processSwapWithPromotion(address user, address promotionalItem, uint256 tokenId) internal {
+        require(user != address(0), "Invalid user address");
+        require(promotionalItem != address(0), "Invalid promotional item address");
         
-        // Process base buy after promotion logic
-        processBuy(user, wrappedSonicAmount);
+        // Verify and consume the promotional item
+        bool isValid = IPromotionalItem(promotionalItem).usePromotionalItem(tokenId);
+        require(isValid, "Invalid promotional item");
+        
+        // Process transaction with lottery entry
+        if (lotteryAddress != address(0)) {
+            IDragonLotterySwap(lotteryAddress).processBuy(user, 0);
+        }
     }
 
     /**
-     * @dev Processes an entry (internal function)
-     * @param user User address
-     * @param wrappedSonicAmount wS amount
-     * @param scratcherId Scratcher ID
-     * @param promotionalItem Promotional item interface
-     * @param itemId Item ID
+     * @dev Process entry for lottery
+     * @param user Address of the user to register for the lottery
+     * @param wrappedSonicAmount Amount of wrapped Sonic tokens involved
      */
-    function processEntry(
-        address user,
-        uint256 wrappedSonicAmount,
-        uint256 scratcherId,
-        IPromotionalItem promotionalItem,
-        uint256 itemId
-    ) internal {
-        // Apply both scratcher and promotional item if available
-        uint256 effectiveAmount = wrappedSonicAmount;
+    function processEntry(address user, uint256 wrappedSonicAmount) internal {
+        require(user != address(0), "Invalid user address");
         
-        // Apply scratcher boost
-        if (goldScratcherAddress != address(0) && scratcherId > 0) {
-            // Scratcher logic would go here
+        // Only allow end users to participate in the lottery, not contracts or proxies
+        if (lotteryAddress != address(0) && tx.origin == user) {
+            IDragonLotterySwap(lotteryAddress).processBuy(user, wrappedSonicAmount);
         }
+    }
+
+    /**
+     * @dev Hook to be called after a swap to trigger the lottery
+     * @param from The address that sent the tokens
+     * @param to The address that received the tokens
+     * @param amount The amount of tokens transferred
+     */
+    function afterSwap(address from, address to, uint256 amount) external override {
+        // Only allow swap trigger to call this function
+        require(msg.sender == exchangePair, "Caller is not authorized");
         
-        // Apply promotional item boost
-        if (address(promotionalItem) != address(0) && itemId > 0) {
-            (bool success, uint256 boostedAmount) = promotionalItem.applyItem(itemId, user, effectiveAmount);
-            if (success) {
-                effectiveAmount = boostedAmount;
-            }
+        // Process lottery entry if wS to DRAGON swap
+        if (from == exchangePair && to != address(0) && amount > 0) {
+            processEntry(to, 0); // We don't know the wS amount, so pass 0
         }
+    }
+
+    /**
+     * @dev Add the VRF connector to handle lottery requests
+     * @param vrfConnector The address of the VRF connector
+     */
+    function setVRFConnector(address vrfConnector) external override onlyOwner {
+        require(vrfConnector != address(0), "VRF Connector cannot be zero address");
         
-        // Process with final boosted amount
-        processBuy(user, effectiveAmount);
+        // VRF connector should be set on the lottery contract
+        if (lotteryAddress != address(0)) {
+            // In this implementation, we don't directly interact with the VRF connector
+            // The lottery contract should handle this
+        }
+    }
+
+    /**
+     * @dev Add to the jackpot balance
+     * @param amount The amount to add to the jackpot
+     */
+    function addToJackpot(uint256 amount) external override {
+        require(amount > 0, "Amount must be greater than 0");
+        
+        // Only allow the owner or swap trigger to add to jackpot
+        require(msg.sender == owner() || msg.sender == exchangePair, "Not authorized");
+        
+        // Transfer tokens to the jackpot vault
+        wrappedSonic.safeTransferFrom(msg.sender, jackpotVault, amount);
+        IDragonJackpotVault(jackpotVault).addToJackpot(amount);
+        
+        emit FeeTransferred(jackpotVault, amount, "Jackpot");
     }
 
     /**
@@ -880,33 +932,5 @@ contract Dragon is ERC20, Ownable, ReentrancyGuard, IDragon, ERC20Burnable {
             super._update(from, address(0), burnAmount);
             emit TokensBurned(burnAmount);
         }
-    }
-
-    // Implementation of IDragon interface functions
-
-    /**
-     * @dev Hook to be called after a swap to trigger the lottery
-     * @param from The address that sent the tokens
-     * @param to The address that received the tokens
-     * @param amount The amount of tokens transferred
-     */
-    function afterSwap(address from, address to, uint256 amount) external override {
-        // Implementation would go here
-    }
-    
-    /**
-     * @dev Add the VRF connector to handle lottery requests
-     * @param vrfConnector The address of the VRF connector
-     */
-    function setVRFConnector(address vrfConnector) external override onlyOwner {
-        // Implementation would go here
-    }
-    
-    /**
-     * @dev Add to the jackpot balance
-     * @param amount The amount to add to the jackpot
-     */
-    function addToJackpot(uint256 amount) external override {
-        // Implementation would go here
     }
 }

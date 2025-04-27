@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   =============================
+ *      DRAGON JACKPOT VAULT
+ *   =============================
+ *     Treasury of the Lottery
+ *   =============================
+ *
+ * // "Follow the rich white man." - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";

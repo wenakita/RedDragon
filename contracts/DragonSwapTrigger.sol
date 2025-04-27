@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ============================
+ *        DRAGON SWAP TRIGGER
+ *   ============================
+ *     Lottery Entry Detection
+ *   ============================
+ *
+ * // "Do you understand the words that are coming out of my mouth?" - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/access/Ownable.sol";

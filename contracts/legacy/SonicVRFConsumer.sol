@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ===============================
+ *        SONIC VRF CONSUMER
+ *   ===============================
+ *       Randomness Generation
+ *   ===============================
+ *
+ * // "Put your hands up, let me see those golden nuggets!" - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.18;
 
 import "../interfaces/ILayerZeroEndpoint.sol";

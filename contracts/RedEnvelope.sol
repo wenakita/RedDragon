@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ===============================
+ *           RED ENVELOPE
+ *   ===============================
+ *      Lucky Money for Jackpot
+ *   ===============================
+ *
+ * // "This is the Beach Boys! You know... 'Hahahahaha good vibrations!'" - Genevieve
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";

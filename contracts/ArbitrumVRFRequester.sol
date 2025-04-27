@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ================================
+ *      ARBITRUM VRF REQUESTER
+ *   ================================
+ *     Cross-Chain RNG Provider
+ *   ================================
+ *
+ * // "I'll take your ass to Sea World!" - Carter 
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.18;
 
 import "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";

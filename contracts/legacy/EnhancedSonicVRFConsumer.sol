@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ *   ===================================
+ *      ENHANCED SONIC VRF CONSUMER
+ *   ===================================
+ *     Layer Zero State Reading System
+ *   ===================================
+ *
+ * // "This is the worst vacation ever!" - Carter
+ * // https://x.com/sonicreddragon
+ * // https://t.me/sonicreddragon
+ */
+
 pragma solidity ^0.8.18;
 
 import "../interfaces/ILayerZeroEndpoint.sol";
