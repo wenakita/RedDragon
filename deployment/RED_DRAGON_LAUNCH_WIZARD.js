@@ -157,8 +157,42 @@ async function launchRedDragon(hre, taskArgs) {
     // Reload contract addresses
     contractAddresses = JSON.parse(fs.readFileSync(contractAddressesPath, "utf8"));
     
-    // Step 8: Configure All Contracts
-    console.log("\n== Step 8: Configure All Contracts ==\n");
+    // Step 8: Deploy DragonPartnerRegistry
+    console.log("\n== Step 8: Deploy DragonPartnerRegistry ==\n");
+    if (contractAddresses.partnerRegistry && contractAddresses.partnerRegistry !== "PARTNER_REGISTRY_ADDRESS_HERE") {
+      console.log(`DragonPartnerRegistry already deployed at: ${contractAddresses.partnerRegistry}`);
+      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+      if (redeploy.toLowerCase() !== 'y') {
+        console.log("Skipping DragonPartnerRegistry deployment.");
+      } else {
+        await deployPartnerRegistry();
+      }
+    } else {
+      await deployPartnerRegistry();
+    }
+    
+    // Reload contract addresses
+    contractAddresses = JSON.parse(fs.readFileSync(contractAddressesPath, "utf8"));
+    
+    // Step 9: Deploy ve69LPPoolVoting
+    console.log("\n== Step 9: Deploy ve69LPPoolVoting ==\n");
+    if (contractAddresses.ve69LPPoolVoting && contractAddresses.ve69LPPoolVoting !== "VE69LP_POOL_VOTING_ADDRESS_HERE") {
+      console.log(`ve69LPPoolVoting already deployed at: ${contractAddresses.ve69LPPoolVoting}`);
+      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+      if (redeploy.toLowerCase() !== 'y') {
+        console.log("Skipping ve69LPPoolVoting deployment.");
+      } else {
+        await deployVe69LPPoolVoting();
+      }
+    } else {
+      await deployVe69LPPoolVoting();
+    }
+    
+    // Reload contract addresses
+    contractAddresses = JSON.parse(fs.readFileSync(contractAddressesPath, "utf8"));
+    
+    // Step 10: Configure All Contracts
+    console.log("\n== Step 10: Configure All Contracts ==\n");
     const skipVrf = taskArgs.skipVrf || false;
     
     if (skipVrf) {
@@ -259,6 +293,20 @@ async function deployVe69LPFeeDistributor() {
  */
 async function deployDragonLotterySwap() {
   await executeScript("deploy-lotteryswap.js");
+}
+
+/**
+ * Deploy DragonPartnerRegistry
+ */
+async function deployPartnerRegistry() {
+  await executeScript("scripts/deploy/deploy-partner-registry.js");
+}
+
+/**
+ * Deploy ve69LPPoolVoting
+ */
+async function deployVe69LPPoolVoting() {
+  await executeScript("scripts/deploy/deploy-ve69lp-pool-voting.js");
 }
 
 /**

@@ -1,87 +1,30 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.18;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title IDragon
- * @dev Interface for the Dragon token contract
+ * @notice Interface for the Dragon token with additional functionality
  */
-interface IDragon {
+interface IDragon is IERC20 {
     /**
-     * @dev Get the buy fees structure
-     * @return jackpotFee Fee percentage allocated to jackpot
-     * @return ve69LPFee Fee percentage allocated to ve69LP
-     * @return burnFee Fee percentage allocated to burn
-     * @return totalFee Total fee percentage
+     * @notice Hook to be called after a swap to trigger the lottery
+     * @param from The address that sent the tokens
+     * @param to The address that received the tokens
+     * @param amount The amount of tokens transferred
      */
-    function getBuyFees() external view returns (
-        uint256 jackpotFee,
-        uint256 ve69LPFee,
-        uint256 burnFee,
-        uint256 totalFee
-    );
+    function afterSwap(address from, address to, uint256 amount) external;
     
     /**
-     * @dev Get the sell fees structure
-     * @return jackpotFee Fee percentage allocated to jackpot
-     * @return ve69LPFee Fee percentage allocated to ve69LP
-     * @return burnFee Fee percentage allocated to burn
-     * @return totalFee Total fee percentage
+     * @notice Add the VRF connector to handle lottery requests
+     * @param vrfConnector The address of the VRF connector
      */
-    function getSellFees() external view returns (
-        uint256 jackpotFee,
-        uint256 ve69LPFee,
-        uint256 burnFee,
-        uint256 totalFee
-    );
+    function setVRFConnector(address vrfConnector) external;
     
     /**
-     * @dev Set the buy fees structure
-     * @param _jackpotFee Fee percentage to jackpot
-     * @param _ve69LPFee Fee percentage to ve69LP
-     * @param _burnFee Fee percentage to burn
+     * @notice Add to the jackpot balance
+     * @param amount The amount to add to the jackpot
      */
-    function setBuyFees(
-        uint256 _jackpotFee,
-        uint256 _ve69LPFee,
-        uint256 _burnFee
-    ) external;
-    
-    /**
-     * @dev Set the sell fees structure
-     * @param _jackpotFee Fee percentage to jackpot
-     * @param _ve69LPFee Fee percentage to ve69LP
-     * @param _burnFee Fee percentage to burn
-     */
-    function setSellFees(
-        uint256 _jackpotFee,
-        uint256 _ve69LPFee,
-        uint256 _burnFee
-    ) external;
-    
-    /**
-     * @dev Mint new tokens
-     * @param to Address to mint tokens to
-     * @param amount Amount of tokens to mint
-     */
-    function mint(address to, uint256 amount) external;
-    
-    /**
-     * @dev Burn tokens
-     * @param amount Amount of tokens to burn
-     */
-    function burn(uint256 amount) external;
-    
-    /**
-     * @dev Check if an address is excluded from fees
-     * @param account Address to check
-     * @return True if excluded from fees
-     */
-    function isExcludedFromFees(address account) external view returns (bool);
-    
-    /**
-     * @dev Exclude or include an address from fees
-     * @param account Address to exclude/include
-     * @param excluded True to exclude, false to include
-     */
-    function setExcludedFromFees(address account, bool excluded) external;
+    function addToJackpot(uint256 amount) external;
 } 

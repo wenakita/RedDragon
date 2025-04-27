@@ -3,13 +3,13 @@ pragma solidity ^0.8.20;
 
 /**
  * @title IRedEnvelope
- * @dev Interface for the RedEnvelope contract
+ * @dev Interface for the RedEnvelope contract that provides a fixed 0.69% probability boost
  */
 interface IRedEnvelope {
     /**
-     * @dev Calculate boost amount for a user based on their red envelope rarity
+     * @dev Calculate boost amount for a user - always returns the fixed 0.69% boost
      * @param user Address of the user to calculate boost for
-     * @return boostAmount The boost amount in BOOST_PRECISION units
+     * @return boostAmount The fixed boost amount (69 = 0.69%)
      */
     function calculateBoost(address user) external view returns (uint256);
 

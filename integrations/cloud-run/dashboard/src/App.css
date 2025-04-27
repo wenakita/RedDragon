@@ -1,0 +1,19 @@
+.app-container {
+  min-height: 100vh;
+}
+
+.stats-card {
+  transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.app-header {
+  border-bottom: 3px solid #ff3e00;
+  padding-bottom: 0.5rem;
+  margin-bottom: 2rem;
+  display: inline-block;
+} 

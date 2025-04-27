@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dragon Dashboard Access Portal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      color: #333;
+    }
+    
+    .container {
+      width: 80%;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #fff;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    h1 {
+      color: #ff3e00;
+      text-align: center;
+      border-bottom: 2px solid #ff3e00;
+      padding-bottom: 10px;
+    }
+    
+    .button {
+      display: inline-block;
+      background: #ff3e00;
+      color: #fff;
+      padding: 10px 20px;
+      margin: 20px 0;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 16px;
+      text-align: center;
+    }
+    
+    .button:hover {
+      background: #e03700;
+    }
+    
+    .button-container {
+      text-align: center;
+    }
+    
+    .note {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f9f9f9;
+      border-left: 3px solid #ff3e00;
+    }
+
+    .access-options {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .access-option {
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .access-option h3 {
+      margin-top: 0;
+      color: #ff3e00;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Dragon Dashboard Access Portal</h1>
+    <p>Welcome to the Dragon Dashboard Access Portal. Use one of the options below to access the Dragon Dashboard.</p>
+    
+    <div class="access-options">
+      <div class="access-option">
+        <h3>Option 1: Direct Access</h3>
+        <p>For users with sonicreddragon.io accounts: Use the direct dashboard link.</p>
+        <div class="button-container">
+          <a href="https://dragon-dashboard-893099525123.us-central1.run.app" class="button">Access Dashboard Directly</a>
+        </div>
+      </div>
+
+      <div class="access-option">
+        <h3>Option 2: URL Generator</h3>
+        <p>For authorized users: Generate a temporary access link.</p>
+        <div class="button-container">
+          <a href="https://dragon-dashboard-generator-893099525123.us-central1.run.app/generate-url" class="button">Generate Signed URL</a>
+        </div>
+      </div>
+    </div>
+    
+    <div class="note">
+      <p><strong>Note:</strong> Generated access links are valid for 1 hour. If your session expires, return to this page to generate a new link.</p>
+      <p>This dashboard is for authorized users only. All access attempts are logged.</p>
+    </div>
+  </div>
+</body>
+</html> 

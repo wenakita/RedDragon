@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
 /**
  * @title SimpleMockVRF
- * @dev A simplified mock VRF contract for testing that doesn't rely on interfaces
+ * @dev Very basic mock of a VRF provider for test environments
  */
 contract SimpleMockVRF {
     address public coordinatorAddress;
@@ -12,9 +12,14 @@ contract SimpleMockVRF {
         coordinatorAddress = address(this);
     }
     
-    // Simple function to generate a random number for testing
-    function getRandomNumber() external view returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty, msg.sender)));
+    /**
+     * @dev Generate a pseudo-random number
+     * @return A random-like uint256 value
+     */
+    function getRandomness() external view returns (uint256) {
+        // In a production environment, this would be replaced with a proper VRF solution
+        // This is only for testing and should never be used in production
+        return uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender)));
     }
     
     // Simulate requesting randomness

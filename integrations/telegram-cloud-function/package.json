@@ -1,0 +1,13 @@
+{
+  "name": "telegram-cloud-function",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.2",
+    "@google-cloud/secret-manager": "^4.2.2"
+  }
+}

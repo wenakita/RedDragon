@@ -40,9 +40,10 @@ keystore*.json
 
 # Deployment backups - contain sensitive data
 
-# Ignore deployment scripts and integrations (do not commit)
+# Ignore deployment scripts (do not commit)
 /deployment/
-/integrations/
+# /integrations/ (commented out to allow access to lottery-notifications)
+# /integrations/
 
 # Ignore config folders that may contain secrets
 /deployment/config/
