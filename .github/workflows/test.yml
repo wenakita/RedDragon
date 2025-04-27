@@ -1,43 +1,45 @@
-name: CI
+name: Dragon Token Tests
 
 on:
   push:
+    branches: [ main, develop ]
   pull_request:
-  workflow_dispatch:
-
-env:
-  FOUNDRY_PROFILE: ci
+    branches: [ main, develop ]
 
 jobs:
-  check:
-    strategy:
-      fail-fast: true
-
-    name: Foundry project
+  forge-tests:
+    name: Forge Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
-
+      
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Show Forge version
-        run: |
-          forge --version
-
-      - name: Run Forge fmt
-        run: |
-          forge fmt --check
-        id: fmt
-
-      - name: Run Forge build
-        run: |
-          forge build --sizes
-        id: build
-
+        with:
+          version: nightly
+      
+      - name: Install dependencies
+        run: forge install
+      
       - name: Run Forge tests
-        run: |
-          forge test -vvv
-        id: test
+        run: forge test -vvv
+  
+  hardhat-tests:
+    name: Hardhat Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run Hardhat tests
+        run: npx hardhat test

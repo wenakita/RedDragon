@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
-import "../../contracts/interfaces/ILayerZeroEndpoint.sol";
-import "../../contracts/interfaces/ILayerZeroReceiver.sol";
+import "../interfaces/ILayerZeroEndpoint.sol";
+import "../interfaces/ILayerZeroReceiver.sol";
 
 /**
  * @title MockLayerZeroEndpoint
@@ -156,7 +156,12 @@ contract MockLayerZeroEndpoint is ILayerZeroEndpoint {
         return false;
     }
     
-    function getConfig(uint16 _version, uint16 _chainId, address _userApplication, uint256 _configType) external view override returns (bytes memory) {
+    function getConfig(
+        uint16 _version, 
+        uint16 _chainId, 
+        address _userApplication, 
+        uint256 _configType
+    ) external view override returns (bytes memory) {
         return bytes("");
     }
     
@@ -168,7 +173,12 @@ contract MockLayerZeroEndpoint is ILayerZeroEndpoint {
         return 1;
     }
     
-    function setConfig(uint16 _version, uint16 _chainId, uint256 _configType, bytes calldata _config) external override {}
+    function setConfig(
+        uint16 _version,
+        uint16 _chainId,
+        uint256 _configType,
+        bytes calldata _config
+    ) external override {}
     
     function setSendVersion(uint16 _version) external override {}
     
