@@ -24,7 +24,7 @@ The Dragon Project implements an advanced tokenomic mechanism for balancing jack
 
 1. **Adaptive Jackpot Distribution** - The percentage of jackpot distributed in each round dynamically adjusts between 59%-79% (or wider) based on market conditions, participant count, time elapsed, and jackpot size.
 
-2. **Unbounded Fee Allocation** - Transaction fees are now allocated between jackpot and liquidity providers using a fully dynamic system without fixed boundaries, allowing complete adaptability based on real-time market conditions.
+2. **Unbounded Fee Allocation** - Transaction fees are now allocated between jackpot and liquidity providers using a fully dynamic system without fixed boundaries, allowing complete adaptability based on real-time market conditions using the Hermès mathematical formula inspired by Maia DAO's HermesOmnichain protocol.
 
 Our comprehensive simulations demonstrate that these enhanced mechanisms provide greater sustainability and adaptability compared to traditional approaches, with distinct advantages that can be tuned to specific business objectives.
 
@@ -606,7 +606,7 @@ These future enhancements represent exciting directions for the ongoing evolutio
 
 ## Appendix: Hermès Formula
 
-The Hermès formula is a mathematical function used to calculate appropriate distribution values based on input size. It produces a balanced and adaptable curve that is particularly suitable for financial applications.
+The Hermès formula is a mathematical function used to calculate appropriate distribution values based on input size. It produces a balanced and adaptable curve that is particularly suitable for financial applications. The formula was inspired by the innovative work of Maia DAO's HermesOmnichain protocol, which pioneered the use of advanced mathematical curves for DeFi tokenomics.
 
 ### Basic Form
 
@@ -658,4 +658,13 @@ The Hermès formula produces a curve with several desirable properties:
 3. **Asymptotic**: Approaches a balanced ratio for very large inputs
 4. **Tunable**: Parameters D and N allow adjustment of curve behavior
 
-These properties make it ideal for both adaptive fee allocation and jackpot distribution mechanisms where response should vary based on market conditions. 
+These properties make it ideal for both adaptive fee allocation and jackpot distribution mechanisms where response should vary based on market conditions.
+
+### Credits and References
+
+The Hermès formula implementation in this project draws inspiration from the pioneering work of Maia DAO's HermesOmnichain project. Their innovative approach to mathematical modeling for DeFi applications has been instrumental in the development of our adaptive systems.
+
+For more information about Maia DAO's original implementation, visit:
+- HermesOmnichain: [Desmos Calculator Visualization](https://www.desmos.com/calculator/f7qgwkla6m)
+- Maia DAO: [MaiaDAOEco](https://twitter.com/MaiaDAOEco)
+- Hermes Protocol: [HermesOmnichain](https://twitter.com/HermesOmnichain) 
