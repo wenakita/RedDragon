@@ -666,5 +666,5 @@ The Hermès formula implementation in this project draws inspiration from the pi
 
 For more information about Maia DAO's original implementation, visit:
 - HermesOmnichain: [Desmos Calculator Visualization](https://www.desmos.com/calculator/f7qgwkla6m)
-- Maia DAO: [MaiaDAOEco](https://twitter.com/MaiaDAOEco)
-- Hermes Protocol: [HermesOmnichain](https://twitter.com/HermesOmnichain) 
+- Maia DAO: [MaiaDAOEco](https://x.com/MaiaDAOEco)
+- Hermes Protocol: [HermesOmnichain](https://x.com/HermesOmnichain) 
