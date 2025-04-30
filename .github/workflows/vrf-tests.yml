@@ -1,0 +1,71 @@
+name: VRF Tests
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'contracts/SonicVRFConsumer.sol'
+      - 'contracts/ArbitrumVRFRequester.sol'
+      - 'contracts/SonicVRFConsumerRead.sol'
+      - 'contracts/mocks/**'
+      - 'test/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'contracts/SonicVRFConsumer.sol'
+      - 'contracts/ArbitrumVRFRequester.sol'
+      - 'contracts/SonicVRFConsumerRead.sol'
+      - 'contracts/mocks/**'
+      - 'test/**'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  foundry-tests:
+    name: Foundry Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      
+      - name: Install dependencies
+        run: |
+          forge install --no-commit foundry-rs/forge-std
+          forge install --no-commit smartcontractkit/chainlink
+          forge install --no-commit OpenZeppelin/openzeppelin-contracts
+          forge install --no-commit LayerZero-Labs/solidity-examples
+
+      - name: Run Forge tests
+        run: forge test --match-path "test/forge/VRF*.t.sol" -vvv
+      
+      - name: Generate coverage report
+        run: forge coverage --match-path "test/forge/VRF*.t.sol" --report lcov
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./lcov.info
+          fail_ci_if_error: false
+
+  hardhat-tests:
+    name: Hardhat Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run Hardhat tests
+        run: npx hardhat test test/vrf-implementation.test.js 
