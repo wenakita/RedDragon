@@ -1,15 +1,24 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+
+pragma solidity ^0.8.20;
 
 /**
  * @title IVRFConsumer
- * @notice Interface for contracts that consume VRF randomness
+ * @dev Interface for VRF consumer contracts that can request randomness
  */
 interface IVRFConsumer {
     /**
-     * @notice Function to receive the random values from VRF
-     * @param requestId The ID of the request
-     * @param randomWord The random value
+     * @notice Request randomness for a user
+     * @param user The user requesting randomness
+     * @return requestId The request ID for tracking
      */
-    function fulfillRandomWords(uint64 requestId, uint256 randomWord) external;
+    function requestRandomness(address user) external returns (uint64 requestId);
+    
+    /**
+     * @notice Process randomness received from VRF
+     * @param requestId The request ID
+     * @param user The user who requested randomness
+     * @param randomness The random value
+     */
+    function processRandomness(uint64 requestId, address user, uint256 randomness) external;
 } 

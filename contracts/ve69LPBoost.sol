@@ -69,15 +69,15 @@ contract ve69LPBoost is Ownable, ReentrancyGuard {
      */
     function calculateBoost(address user) public view returns (uint256 boostMultiplier) {
         // Get user's ve69LP balance
-        uint256 userve69LPBalance = ve69LP.balanceOf(user);
+        uint256 userVe69LPBalance = ve69LP.lockedBalanceOf(user);
         
         // Get total ve69LP supply (or voting power)
-        uint256 totalve69LPSupply = ve69LP.totalVotingPower();
+        uint256 totalVe69LPSupply = ve69LP.getTotalVotingPower();
         
         // Use the shared calculator library with our precision values
         return VotingPowerCalculator.calculateBoostMultiplier(
-            userve69LPBalance,
-            totalve69LPSupply,
+            userVe69LPBalance,
+            totalVe69LPSupply,
             baseBoost,
             maxBoost
         );

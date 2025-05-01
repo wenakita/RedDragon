@@ -1,5 +1,6 @@
 [profile.default]
-src = "src"
+src = "contracts/test"
+test = "test/forge"
 out = "out"
 libs = ["node_modules", "lib"]
 remappings = [
@@ -17,6 +18,7 @@ remappings = [
     "hardhat-deploy/=node_modules/hardhat-deploy/",
     "hardhat/=node_modules/hardhat/",
     "solidity-bytes-utils/=node_modules/solidity-bytes-utils/",
+    "forge-std/=lib/forge-std/src/"
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

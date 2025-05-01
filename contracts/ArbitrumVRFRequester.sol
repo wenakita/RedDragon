@@ -1,272 +1,352 @@
 // SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
-/**
- *   ================================
- *      ARBITRUM VRF REQUESTER
- *   ================================
- *     Cross-Chain RNG Provider
- *   ================================
- *
- * // "I'll take your ass to Sea World!" - Carter 
- * // https://x.com/sonicreddragon
- * // https://t.me/sonicreddragon
- */
-
-pragma solidity ^0.8.18;
-
-import "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
+import "./VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "./interfaces/ILayerZeroEndpoint.sol";
 import "./interfaces/ILayerZeroReceiver.sol";
+import "./interfaces/ILayerZeroEndpointV2.sol";
+
+/*
+   =====================================
+        ARBITRUM VRF REQUESTER
+   =====================================
+     Cross-Chain Randomness Hub
+      Chainlink VRF Integration
+    Secure Arbitrum Bridge Protocol
+   =====================================
+
+   🔗 LayerZero Message Protocol
+   🎲 Chainlink VRF Integration
+   🌉 Arbitrum → Sonic Bridge
+*/
 
 /**
  * @title ArbitrumVRFRequester
- * @notice Contract that requests randomness from Chainlink VRF and forwards to Sonic chain
- * @dev Implements Chainlink VRF consumer and LayerZero receiver functionality
+ * @dev Contract that receives requests from Sonic chain, requests randomness from Chainlink VRF,
+ * and sends the randomness back to Sonic chain via LayerZero
  */
-contract ArbitrumVRFRequester is VRFConsumerBaseV2, ILayerZeroReceiver, Ownable, ReentrancyGuard {
-    /* ========== STATE VARIABLES ========== */
-    
-    // Chainlink VRF coordinator
-    VRFCoordinatorV2Interface public vrfCoordinator;
-    
-    // Chainlink VRF subscription ID
+contract ArbitrumVRFRequester is VRFConsumerBaseV2, Ownable, ReentrancyGuard, ILayerZeroReceiver {
+    // Chainlink VRF variables
+    VRFCoordinatorV2Interface public immutable vrfCoordinator;
     uint64 public subscriptionId;
+    bytes32 public keyHash;
+    uint16 public requestConfirmations;
+    uint32 public callbackGasLimit;
+    uint32 public numWords;
     
-    // Chainlink VRF key hash - default to 30 gwei key hash
-    bytes32 public keyHash = 0x8472ba59cf7134dfe321f4d61a430c4857e8b19cdd5230b09952a92671c24409;
-    
-    // LayerZero endpoint
-    ILayerZeroEndpoint public lzEndpoint;
-    
-    // LayerZero Sonic chain ID
-    uint16 public sonicChainId;
-    
-    // Address of the VRF consumer on Sonic
+    // LayerZero variables
+    ILayerZeroEndpointV2 public immutable lzEndpoint;
+    uint32 public sonicChainId;
     address public sonicVRFConsumer;
     
-    // Number of confirmations to wait before fulfillment
-    uint16 public requestConfirmations = 3;
+    // Request tracking
+    mapping(uint256 => RequestStatus) public requests;
     
-    // Number of random words to request
-    uint32 public numWords = 1;
+    struct RequestStatus {
+        uint64 sonicRequestId;
+        address user;
+        bool fulfilled;
+        uint256 randomness;
+    }
     
-    // Mapping to track VRF requests
-    mapping(uint256 => uint64) public vrfRequestIdToRequestId;
-    
-    /* ========== EVENTS ========== */
-    
-    event RandomnessRequested(uint64 indexed requestId, uint256 vrfRequestId);
-    event RandomnessFulfilled(uint64 indexed requestId, uint256 randomWord);
-    event SonicConsumerUpdated(address indexed sonicConsumer);
-    
-    /* ========== CONSTRUCTOR ========== */
+    // Events
+    event VRFRequested(uint256 indexed requestId, uint64 indexed sonicRequestId, address indexed user);
+    event VRFFulfilled(uint256 indexed requestId, uint256 randomness);
+    event VRFSentToSonic(uint256 indexed requestId, uint64 indexed sonicRequestId, address indexed user, uint256 randomness);
+    event SubscriptionIdUpdated(uint64 oldSubscriptionId, uint64 newSubscriptionId);
+    event KeyHashUpdated(bytes32 oldKeyHash, bytes32 newKeyHash);
+    event RequestConfirmationsUpdated(uint16 oldConfirmations, uint16 newConfirmations);
+    event CallbackGasLimitUpdated(uint32 oldLimit, uint32 newLimit);
+    event NumWordsUpdated(uint32 oldNumWords, uint32 newNumWords);
+    event SonicChainIdUpdated(uint32 oldChainId, uint32 newChainId);
+    event SonicVRFConsumerUpdated(address oldConsumer, address newConsumer);
     
     /**
-     * @notice Constructor
-     * @param _vrfCoordinator The Chainlink VRF coordinator address
-     * @param _subscriptionId The Chainlink VRF subscription ID
-     * @param _keyHash The Chainlink VRF key hash
-     * @param _lzEndpoint The LayerZero endpoint address
-     * @param _sonicChainId The LayerZero chain ID for Sonic
-     * @param _sonicVRFConsumer The VRF consumer address on Sonic
+     * @dev Constructor
+     * @param _vrfCoordinator Address of the VRF Coordinator on Arbitrum
+     * @param _endpoint Address of the LayerZero endpoint
+     * @param _subscriptionId Chainlink VRF subscription ID
+     * @param _keyHash Key hash for VRF
+     * @param _sonicChainId LayerZero chain ID for Sonic chain
+     * @param _sonicVRFConsumer Address of the SonicVRFConsumer contract
      */
     constructor(
         address _vrfCoordinator,
+        address _endpoint,
         uint64 _subscriptionId,
         bytes32 _keyHash,
-        address _lzEndpoint,
-        uint16 _sonicChainId,
+        uint32 _sonicChainId,
         address _sonicVRFConsumer
     ) VRFConsumerBaseV2(_vrfCoordinator) Ownable() {
+        require(_vrfCoordinator != address(0), "VRF Coordinator cannot be zero");
+        require(_endpoint != address(0), "Endpoint cannot be zero");
+        require(_sonicVRFConsumer != address(0), "Consumer cannot be zero");
+        
         vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinator);
+        lzEndpoint = ILayerZeroEndpointV2(_endpoint);
         subscriptionId = _subscriptionId;
         keyHash = _keyHash;
-        lzEndpoint = ILayerZeroEndpoint(_lzEndpoint);
         sonicChainId = _sonicChainId;
         sonicVRFConsumer = _sonicVRFConsumer;
+        
+        // Set default values
+        requestConfirmations = 3;
+        callbackGasLimit = 500000;
+        numWords = 1;
     }
     
-    /* ========== LAYERZERO RECEIVER FUNCTIONS ========== */
-    
     /**
-     * @notice Process message received from LayerZero
-     * @dev This function is called when a message is received from Sonic chain
-     * @param _srcChainId The source chain ID
-     * @param _srcAddress The source address
-     * @param _nonce A number that indicates the order of messages
+     * @notice Process LayerZero messages
+     * @param _srcChainId ID of the source chain
+     * @param _srcAddress Address of the source contract
+     * @param _nonce The message nonce
      * @param _payload The message payload
      */
     function lzReceive(
         uint16 _srcChainId,
-        bytes memory _srcAddress,
+        bytes calldata _srcAddress,
         uint64 _nonce,
-        bytes memory _payload
+        bytes calldata _payload
     ) external override {
-        require(msg.sender == address(lzEndpoint), "Only endpoint can call");
-        require(_srcChainId == sonicChainId, "Source must be Sonic chain");
+        require(msg.sender == address(lzEndpoint), "Not from LayerZero endpoint");
+        require(_srcChainId == sonicChainId, "Not from Sonic chain");
         
-        // Extract source address from LZ format
-        address srcAddress;
-        assembly {
-            srcAddress := mload(add(_srcAddress, 20))
-        }
+        // Extract source address
+        address srcAddress = _bytesToAddress(_srcAddress);
+        require(srcAddress == sonicVRFConsumer, "Not from authorized source");
         
-        require(srcAddress == sonicVRFConsumer, "Only trusted consumer can call");
-        
-        // Decode payload to get the request ID
-        uint64 requestId = abi.decode(_payload, (uint64));
+        // Decode the message
+        (uint64 sonicRequestId, address user) = abi.decode(_payload, (uint64, address));
         
         // Request randomness from Chainlink VRF
-        _requestRandomness(requestId);
-    }
-    
-    /**
-     * @notice Request randomness from Chainlink VRF
-     * @param requestId The original request ID from Sonic
-     */
-    function _requestRandomness(uint64 requestId) internal {
-        // Request randomness from Chainlink VRF
-        uint256 vrfRequestId = vrfCoordinator.requestRandomWords(
+        uint256 requestId = vrfCoordinator.requestRandomWords(
             keyHash,
             subscriptionId,
             requestConfirmations,
-            500000, // gas limit
+            callbackGasLimit,
             numWords
         );
         
-        // Store the mapping between vrfRequestId and requestId
-        vrfRequestIdToRequestId[vrfRequestId] = requestId;
+        // Store request info
+        requests[requestId] = RequestStatus({
+            sonicRequestId: sonicRequestId,
+            user: user,
+            fulfilled: false,
+            randomness: 0
+        });
         
-        emit RandomnessRequested(requestId, vrfRequestId);
+        emit VRFRequested(requestId, sonicRequestId, user);
     }
     
     /**
-     * @notice Callback function called by VRF Coordinator
-     * @param vrfRequestId The VRF request ID
-     * @param randomWords The random values generated
+     * @dev Convert bytes to address - handles the LayerZero address format
+     */
+    function _bytesToAddress(bytes calldata _bytes) internal pure returns (address addr) {
+        require(_bytes.length >= 20, "Invalid address length");
+        addr = address(uint160(bytes20(_bytes[_bytes.length - 20:])));
+    }
+    
+    /**
+     * @notice Callback function used by VRF Coordinator to return the random numbers
+     * @param requestId Request ID
+     * @param randomWords Random words
      */
     function fulfillRandomWords(
-        uint256 vrfRequestId,
+        uint256 requestId,
         uint256[] memory randomWords
     ) internal override {
-        // Get the original requestId from Sonic
-        uint64 requestId = vrfRequestIdToRequestId[vrfRequestId];
+        require(msg.sender == getVRFCoordinator(), "Only VRF coordinator can fulfill");
         
-        // Only use the first random word
-        uint256 randomWord = randomWords[0];
+        RequestStatus storage request = requests[requestId];
+        require(!request.fulfilled, "Request already fulfilled");
+        require(request.user != address(0), "Unknown request");
         
-        // Forward the randomness to Sonic chain
-        _forwardRandomnessToSonic(requestId, randomWord);
+        // Store randomness
+        request.randomness = randomWords[0];
+        request.fulfilled = true;
         
-        emit RandomnessFulfilled(requestId, randomWord);
-    }
-    
-    /**
-     * @notice Forward randomness to Sonic chain
-     * @param requestId The original request ID
-     * @param randomWord The random value to forward
-     */
-    function _forwardRandomnessToSonic(
-        uint64 requestId,
-        uint256 randomWord
-    ) internal {
-        // Encode the payload for LayerZero
-        bytes memory payload = abi.encode(requestId, randomWord);
+        emit VRFFulfilled(requestId, randomWords[0]);
         
-        // Get the gas amount needed for the destination chain
-        uint16 version = 1;
-        uint gasLimit = 200000; // Gas for the receiving function
-        bytes memory adapterParams = abi.encodePacked(version, gasLimit);
-        
-        // Calculate fees for sending message to Sonic
-        (uint256 fee, ) = lzEndpoint.estimateFees(
-            sonicChainId,
-            address(this),
-            payload,
-            false,
-            adapterParams
-        );
-        
-        // Send the message via LayerZero
-        lzEndpoint.send{value: fee}(
-            sonicChainId,
-            abi.encodePacked(sonicVRFConsumer, address(this)),
-            payload,
-            payable(address(this)),
-            address(0x0),
-            adapterParams
+        // Send randomness back to Sonic chain
+        _sendRandomnessToSonic(
+            requestId,
+            request.sonicRequestId,
+            request.user,
+            randomWords[0]
         );
     }
     
-    /* ========== ADMIN FUNCTIONS ========== */
-    
     /**
-     * @notice Update the VRF configuration
-     * @param _coordinator The new VRF coordinator
-     * @param _subscriptionId The new subscription ID
-     * @param _keyHash The new key hash
+     * @notice Send randomness back to Sonic chain
+     * @param _requestId Chainlink request ID
+     * @param _sonicRequestId Sonic request ID
+     * @param _user User address
+     * @param _randomness Random number
      */
-    function setVRFConfig(
-        address _coordinator,
-        uint64 _subscriptionId,
-        bytes32 _keyHash
-    ) external onlyOwner {
-        if (_coordinator != address(0)) {
-            vrfCoordinator = VRFCoordinatorV2Interface(_coordinator);
-        }
-        if (_subscriptionId != 0) {
-            subscriptionId = _subscriptionId;
-        }
-        if (_keyHash != bytes32(0)) {
-            keyHash = _keyHash;
-        }
+    function _sendRandomnessToSonic(
+        uint256 _requestId,
+        uint64 _sonicRequestId,
+        address _user,
+        uint256 _randomness
+    ) internal nonReentrant {
+        // Encode the payload
+        bytes memory payload = abi.encode(_sonicRequestId, _user, _randomness);
+        
+        // Create message parameters
+        ILayerZeroEndpointV2.MessagingParams memory params = ILayerZeroEndpointV2.MessagingParams({
+            dstEid: sonicChainId,
+            receiver: abi.encodePacked(sonicVRFConsumer),
+            message: payload,
+            options: abi.encodePacked(uint16(1), uint256(500000)),
+            payInLzToken: false
+        });
+        
+        // Set a fixed fee for simplicity
+        uint256 messageFee = 0.01 ether;
+        
+        // Send message
+        lzEndpoint.send{value: messageFee}(params, payable(address(this)));
+        
+        emit VRFSentToSonic(_requestId, _sonicRequestId, _user, _randomness);
     }
     
     /**
-     * @notice Update the request configuration
-     * @param _confirmations The number of confirmations to wait
-     * @param _words The number of random words to request
+     * @notice Override to implement the _requestRandomness function required by VRFConsumerBase
+     * @param user User requesting randomness
+     * @return requestId The ID of the randomness request
      */
-    function setRequestConfig(
-        uint16 _confirmations,
-        uint32 _words
-    ) external onlyOwner {
-        if (_confirmations > 0) {
-            requestConfirmations = _confirmations;
-        }
-        if (_words > 0) {
-            numWords = _words;
-        }
+    function _requestRandomness(address user) internal override returns (uint256) {
+        revert("Not implemented - use LayerZero message path");
     }
     
     /**
-     * @notice Update the Sonic VRF consumer
-     * @param _sonicVRFConsumer The new consumer address on Sonic
+     * @notice Override to implement the _fulfillRandomness function required by VRFConsumerBase
+     * @param requestId Request ID
+     * @param randomness Random value
      */
-    function setSonicVRFConsumer(address _sonicVRFConsumer) external onlyOwner {
-        require(_sonicVRFConsumer != address(0), "Consumer cannot be zero address");
+    function _fulfillRandomness(uint256 requestId, uint256 randomness) internal override {
+        revert("Not implemented - directly use fulfillRandomWords");
+    }
+    
+    /**
+     * @notice Update the Chainlink VRF subscription ID
+     * @param _subscriptionId New subscription ID
+     */
+    function updateSubscriptionId(uint64 _subscriptionId) external onlyOwner {
+        uint64 oldSubscriptionId = subscriptionId;
+        subscriptionId = _subscriptionId;
+        emit SubscriptionIdUpdated(oldSubscriptionId, _subscriptionId);
+    }
+    
+    /**
+     * @notice Update the key hash
+     * @param _keyHash New key hash
+     */
+    function updateKeyHash(bytes32 _keyHash) external onlyOwner {
+        bytes32 oldKeyHash = keyHash;
+        keyHash = _keyHash;
+        emit KeyHashUpdated(oldKeyHash, _keyHash);
+    }
+    
+    /**
+     * @notice Update the request confirmations
+     * @param _requestConfirmations New request confirmations
+     */
+    function updateRequestConfirmations(uint16 _requestConfirmations) external onlyOwner {
+        uint16 oldConfirmations = requestConfirmations;
+        requestConfirmations = _requestConfirmations;
+        emit RequestConfirmationsUpdated(oldConfirmations, _requestConfirmations);
+    }
+    
+    /**
+     * @notice Update the callback gas limit
+     * @param _callbackGasLimit New callback gas limit
+     */
+    function updateCallbackGasLimit(uint32 _callbackGasLimit) external onlyOwner {
+        uint32 oldLimit = callbackGasLimit;
+        callbackGasLimit = _callbackGasLimit;
+        emit CallbackGasLimitUpdated(oldLimit, _callbackGasLimit);
+    }
+    
+    /**
+     * @notice Update the number of words
+     * @param _numWords New number of words
+     */
+    function updateNumWords(uint32 _numWords) external onlyOwner {
+        require(_numWords > 0, "NumWords must be greater than 0");
+        uint32 oldNumWords = numWords;
+        numWords = _numWords;
+        emit NumWordsUpdated(oldNumWords, _numWords);
+    }
+    
+    /**
+     * @notice Update the Sonic chain ID
+     * @param _sonicChainId New Sonic chain ID
+     */
+    function updateSonicChainId(uint32 _sonicChainId) external onlyOwner {
+        uint32 oldChainId = sonicChainId;
+        sonicChainId = _sonicChainId;
+        emit SonicChainIdUpdated(oldChainId, _sonicChainId);
+    }
+    
+    /**
+     * @notice Update the Sonic VRF consumer address
+     * @param _sonicVRFConsumer New Sonic VRF consumer address
+     */
+    function updateSonicVRFConsumer(address _sonicVRFConsumer) external onlyOwner {
+        require(_sonicVRFConsumer != address(0), "Cannot set to zero address");
+        address oldConsumer = sonicVRFConsumer;
         sonicVRFConsumer = _sonicVRFConsumer;
-        emit SonicConsumerUpdated(_sonicVRFConsumer);
+        emit SonicVRFConsumerUpdated(oldConsumer, _sonicVRFConsumer);
     }
     
     /**
-     * @notice Withdraw ETH from the contract
-     * @param to The address to send ETH to
-     * @param amount The amount of ETH to withdraw
+     * @notice Withdraw native tokens from the contract
+     * @param _amount Amount to withdraw
+     * @param _to Address to withdraw to
      */
-    function withdrawETH(address to, uint256 amount) external onlyOwner {
-        require(to != address(0), "Cannot withdraw to zero address");
-        require(amount <= address(this).balance, "Insufficient balance");
-        
-        (bool success, ) = to.call{value: amount}("");
-        require(success, "ETH transfer failed");
+    function withdraw(uint256 _amount, address _to) external onlyOwner nonReentrant {
+        require(_to != address(0), "Cannot withdraw to zero address");
+        (bool success, ) = _to.call{value: _amount}("");
+        require(success, "Withdrawal failed");
     }
     
     /**
-     * @notice Allow the contract to receive ETH
+     * @notice Force retry sending randomness to Sonic if it failed for any reason
+     * @param _requestId Request ID to retry
+     */
+    function retrySendRandomness(uint256 _requestId) external onlyOwner nonReentrant {
+        RequestStatus storage request = requests[_requestId];
+        require(request.fulfilled, "Request not fulfilled yet");
+        require(request.user != address(0), "Unknown request");
+        
+        _sendRandomnessToSonic(
+            _requestId,
+            request.sonicRequestId,
+            request.user,
+            request.randomness
+        );
+    }
+    
+    /**
+     * @notice Check if a request exists and its status
+     * @param _requestId Request ID to check
+     * @return exists Whether the request exists
+     * @return fulfilled Whether the request is fulfilled
+     * @return randomness The randomness if fulfilled
+     */
+    function getRequestStatus(uint256 _requestId) external view returns (bool exists, bool fulfilled, uint256 randomness) {
+        RequestStatus storage request = requests[_requestId];
+        if (request.user == address(0)) {
+            return (false, false, 0);
+        }
+        return (true, request.fulfilled, request.randomness);
+    }
+    
+    /**
+     * @notice Allow the contract to receive native tokens
      */
     receive() external payable {}
 } 

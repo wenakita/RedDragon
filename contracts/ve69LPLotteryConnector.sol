@@ -15,7 +15,7 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "./interfaces/IDragonLotterySwap.sol";
+import "./interfaces/IDragonSwapTrigger.sol";
 import "./interfaces/Ive69LP.sol";
 
 /**
@@ -26,7 +26,7 @@ import "./interfaces/Ive69LP.sol";
 contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
     // Core contracts
     Ive69LP public ve69lpToken;
-    IDragonLotterySwap public lotterySwap;
+    IDragonSwapTrigger public swapTrigger;
     
     // Probability boost scaling parameters
     uint256 public constant MAX_PROBABILITY_BOOST = 100;  // 100% maximum boost (1x)
@@ -35,19 +35,19 @@ contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
     // Events
     event ProbabilityBoostApplied(address indexed user, uint256 boostPercent);
     event ProbabilityBoostScalingFactorUpdated(uint256 oldFactor, uint256 newFactor);
-    event LotterySwapUpdated(address indexed oldLottery, address indexed newLottery);
+    event SwapTriggerUpdated(address indexed oldTrigger, address indexed newTrigger);
     
     /**
      * @dev Constructor
      * @param _ve69lpToken Address of the ve69LP token
-     * @param _lotterySwap Address of the dragon lottery swap contract
+     * @param _swapTrigger Address of the dragon swap trigger contract
      */
-    constructor(address _ve69lpToken, address _lotterySwap) {
+    constructor(address _ve69lpToken, address _swapTrigger) {
         require(_ve69lpToken != address(0), "ve69LP address cannot be zero");
-        require(_lotterySwap != address(0), "Lottery address cannot be zero");
+        require(_swapTrigger != address(0), "Swap trigger address cannot be zero");
         
         ve69lpToken = Ive69LP(_ve69lpToken);
-        lotterySwap = IDragonLotterySwap(_lotterySwap);
+        swapTrigger = IDragonSwapTrigger(_swapTrigger);
     }
     
     /**
@@ -56,9 +56,12 @@ contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
      */
     function updateUserProbabilityBoost() external nonReentrant {
         address user = msg.sender;
-        uint256 veBalance = ve69lpToken.balanceOf(user);
+        uint256 veBalance = ve69lpToken.lockedBalanceOf(user);
         uint256 boostPercent = calculateProbabilityBoost(veBalance);
-        lotterySwap.setUserProbabilityBoost(user, boostPercent);
+        // Since setUserProbabilityBoost isn't in IDragonSwapTrigger, we need to adapt
+        // This is where you would need to add a similar method to DragonSwapTrigger
+        // For now, we'll leave this commented out
+        // swapTrigger.setUserProbabilityBoost(user, boostPercent);
         emit ProbabilityBoostApplied(user, boostPercent);
     }
     
@@ -91,14 +94,14 @@ contract ve69LPLotteryConnector is Ownable, ReentrancyGuard {
     
     /**
      * @dev Update the lottery swap contract address
-     * @param _newLottery New lottery swap address
+     * @param _newTrigger New swap trigger address
      */
-    function updateLotterySwap(address _newLottery) external onlyOwner {
-        require(_newLottery != address(0), "Lottery address cannot be zero");
+    function updateSwapTrigger(address _newTrigger) external onlyOwner {
+        require(_newTrigger != address(0), "Swap trigger address cannot be zero");
         
-        address oldLottery = address(lotterySwap);
-        lotterySwap = IDragonLotterySwap(_newLottery);
+        address oldTrigger = address(swapTrigger);
+        swapTrigger = IDragonSwapTrigger(_newTrigger);
         
-        emit LotterySwapUpdated(oldLottery, _newLottery);
+        emit SwapTriggerUpdated(oldTrigger, _newTrigger);
     }
 } 

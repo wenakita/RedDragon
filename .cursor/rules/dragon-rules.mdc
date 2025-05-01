@@ -43,6 +43,12 @@ alwaysApply: true
 - The user who executes the swap (`tx.origin`) is awarded, not aggregators or bots.
 - 0.69% of DRAGON is burned for all transfers.
 
+## Probability system:
+- Base unit: $1 USD gives 0.0004% chance of winning (4 out of 1,000,000)
+- Maximum: $10,000 USD gives 4% chance of winning (40,000 out of 1,000,000)
+- Scaling: Linear interpolation between $1 and $10,000
+- ve69LP boost: Up to 2.5x boost using cube root scaling
+
 ## Integration & External Systems
 - Use proper Beets (Balancer fork) integration variables for Sonic chain.
 - Ensure VRF subscription settings are correctly configured.

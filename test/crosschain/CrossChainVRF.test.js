@@ -24,8 +24,8 @@ describe("Cross-Chain VRF Solution", function () {
   
   // Constants for tests
   const ARBITRUM_CHAIN_ID = 110;
-  const SONIC_CHAIN_ID = 198;
-  const SUBSCRIPTION_ID = "1234";
+  const SONIC_CHAIN_ID = 146;
+  const SUBSCRIPTION_ID = "65914062761074472397678945586748169687979388122746586980459153805795126649565";
   const KEY_HASH = "0x8472ba59cf7134dfe321f4d61a430c4857e8b19cdd5230b09952a92671c24409";
   
   // Helper function to generate LayerZero encoded address

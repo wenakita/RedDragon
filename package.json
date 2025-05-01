@@ -20,18 +20,25 @@
   "author": "RedDragon Team",
   "license": "MIT",
   "devDependencies": {
+    "@defi-wonderland/smock": "^2.4.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.12",
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.13",
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@nomiclabs/hardhat-waffle": "^2.0.6",
     "@openzeppelin/contracts": "^4.9.6",
+    "@typechain/ethers-v5": "^11.1.2",
+    "@typechain/hardhat": "^6.1.6",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.15.3",
     "chai": "^4.5.0",
     "ethereum-waffle": "^4.0.10",
     "ethers": "^5.7.2",
     "hardhat": "^2.23.0",
+    "hardhat-deploy": "^1.0.2",
     "hardhat-gas-reporter": "^2.2.3",
     "ts-node": "^10.9.2",
+    "typechain": "^8.3.2",
     "typescript": "^5.8.3"
   },
   "dependencies": {
@@ -40,12 +47,15 @@
     "@google-cloud/secret-manager": "^6.0.1",
     "@layerzerolabs/lz-evm-protocol-v2": "^3.0.88",
     "@layerzerolabs/oapp-evm": "^0.3.2",
+    "@layerzerolabs/solidity-examples": "^1.1.0",
     "@openzeppelin/contracts-upgradeable": "^4.8.0",
+    "@pythnetwork/pyth-sdk-solidity": "^4.1.0",
     "axios": "^1.9.0",
     "chalk": "^4.1.2",
     "dotenv": "^16.5.0",
     "form-data": "^4.0.2",
-    "install": "^0.13.0"
+    "install": "^0.13.0",
+    "solc": "^0.8.20"
   },
   "directories": {
     "test": "test",

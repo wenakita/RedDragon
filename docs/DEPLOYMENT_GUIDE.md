@@ -81,8 +81,15 @@ Boosts rewards for ve69LP holders, enhancing reward distribution based on holdin
 ### 6. ve69LPFeeDistributor
 Distributes fees to ve69LP holders according to their proportional share.
 
-### 7. DragonLotterySwap
-Manages the lottery swap functionality triggering the VRF on user swaps.
+### 7. Chain-Specific Swap Triggers
+Manages the lottery functionality for specific chains like Sonic and Base. The system includes:
+
+- **ChainRegistry**: Central registry for managing chain-specific configurations
+- **ChainSpecificSwapTrigger**: Base abstract contract for chain-specific implementations
+- **SonicDragonSwapTrigger**: Implementation for Sonic chain
+- **BaseDragonSwapTrigger**: Implementation for Base chain
+
+Each trigger is configured to work with its native token (wS on Sonic, WETH on Base) and connects to the appropriate VRF service.
 
 ### 8. DragonPartnerRegistry
 Registry for partners with special boosts and permissions.

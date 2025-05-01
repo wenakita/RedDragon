@@ -12,144 +12,117 @@
  * // https://t.me/sonicreddragon
  */
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "./interfaces/IVRFConsumer.sol";
-import "./interfaces/IDragonChainlinkVRF.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "./interfaces/IGoldScratcher.sol";
 
 /**
  * @title GoldScratcherVRFConsumer
- * @dev Example implementation of a VRF consumer for Gold Scratcher
+ * @dev VRF consumer for the Gold Scratcher contract
  */
-contract GoldScratcherVRFConsumer is IVRFConsumer, Ownable {
-    // VRF provider
-    IDragonChainlinkVRF public vrfProvider;
+contract GoldScratcherVRFConsumer is AccessControl {
+    // Constants
+    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
+    bytes32 public constant CALLBACK_ROLE = keccak256("CALLBACK_ROLE");
     
-    // Mapping from requestId to randomness result
-    mapping(bytes32 => uint256) public randomResults;
-    mapping(bytes32 => bool) public requestFulfilled;
+    // Gold Scratcher contract
+    IGoldScratcher public goldScratcher;
     
-    // Mapping from scratcher ID to randomness
-    mapping(uint256 => uint256) public scratcherRandomness;
-    
-    // Last request ID
-    bytes32 public lastRequestId;
-    
-    // Pending scratcher IDs waiting for randomness
-    mapping(bytes32 => uint256[]) public pendingScratchers;
+    // Request tracking
+    mapping(uint64 => address) public requestIdToUser;
+    mapping(uint64 => uint256) public requestIdToScratcherId;
     
     // Events
-    event RandomnessRequested(bytes32 indexed requestId, uint256[] scratcherIds);
-    event RandomnessFulfilled(bytes32 indexed requestId, uint256 randomValue);
-    event ScratcherRandomnessAssigned(uint256 indexed scratcherId, uint256 randomValue);
+    event RequestSent(uint64 indexed requestId, address indexed user, uint256 scratcherId);
+    event RequestFulfilled(uint64 indexed requestId, uint256[] randomWords);
+    event ScratcherRevealed(uint64 indexed requestId, address indexed user, uint256 indexed scratcherId, bool isWinner);
     
     /**
      * @dev Constructor
-     * @param _vrfProvider Address of the VRF provider
+     * @param _goldScratcher Gold Scratcher contract address
      */
-    constructor(address _vrfProvider) Ownable() {
-        require(_vrfProvider != address(0), "VRF provider cannot be zero address");
-        vrfProvider = IDragonChainlinkVRF(_vrfProvider);
+    constructor(address _goldScratcher) {
+        require(_goldScratcher != address(0), "Invalid Gold Scratcher address");
+        
+        goldScratcher = IGoldScratcher(_goldScratcher);
+        
+        // Set up roles
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MANAGER_ROLE, msg.sender);
     }
     
     /**
-     * @dev Requests randomness for a batch of scratcher IDs
-     * @param scratcherIds Array of scratcher IDs to assign randomness to
+     * @notice Request randomness for a scratcher
+     * @param user The user who bought the scratcher
+     * @param scratcherId The ID of the scratcher
      * @return requestId The ID of the randomness request
      */
-    function requestRandomnessForScratchers(uint256[] calldata scratcherIds) external onlyOwner returns (bytes32) {
-        require(scratcherIds.length > 0, "No scratcher IDs provided");
+    function requestRandomness(address user, uint256 scratcherId) external onlyRole(CALLBACK_ROLE) returns (uint64) {
+        require(user != address(0), "Invalid user address");
         
-        // Request randomness from VRF provider
-        bytes32 requestId = vrfProvider.requestRandomness(1); // Request one random word
+        // Generate a pseudo-random request ID (in a real implementation, this would come from a VRF source)
+        uint64 requestId = uint64(uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, user, scratcherId))));
         
-        // Store the scratcher IDs for this request
-        pendingScratchers[requestId] = scratcherIds;
+        // Track request information
+        requestIdToUser[requestId] = user;
+        requestIdToScratcherId[requestId] = scratcherId;
         
-        // Update last request ID
-        lastRequestId = requestId;
+        emit RequestSent(requestId, user, scratcherId);
         
-        emit RandomnessRequested(requestId, scratcherIds);
         return requestId;
     }
     
     /**
-     * @dev Fulfill random words callback
-     * @param requestId The ID of the randomness request
-     * @param randomWords The random values
+     * @notice Process randomness
+     * @param requestId The request ID
+     * @param randomness The random value
      */
-    function rawFulfillRandomWords(bytes32 requestId, uint256[] memory randomWords) external override {
-        require(msg.sender == address(vrfProvider), "Only VRF provider can fulfill");
-        require(!requestFulfilled[requestId], "Request already fulfilled");
-        require(randomWords.length > 0, "No random words provided");
+    function processRandomness(uint64 requestId, uint256 randomness) external onlyRole(CALLBACK_ROLE) {
+        address user = requestIdToUser[requestId];
+        uint256 scratcherId = requestIdToScratcherId[requestId];
         
-        // Mark request as fulfilled
-        requestFulfilled[requestId] = true;
+        require(user != address(0), "Request not found");
         
-        // Store the random value
-        uint256 randomValue = randomWords[0];
-        randomResults[requestId] = randomValue;
+        // Convert single randomness to array for event
+        uint256[] memory randomWords = new uint256[](1);
+        randomWords[0] = randomness;
         
-        // Process pending scratchers
-        uint256[] memory scratcherIds = pendingScratchers[requestId];
-        for (uint256 i = 0; i < scratcherIds.length; i++) {
-            uint256 scratcherId = scratcherIds[i];
-            
-            // Generate a unique random value for each scratcher using the provided randomness
-            uint256 scratcherRandom = uint256(keccak256(abi.encode(randomValue, scratcherId)));
-            
-            // Store the randomness for this scratcher
-            scratcherRandomness[scratcherId] = scratcherRandom;
-            
-            emit ScratcherRandomnessAssigned(scratcherId, scratcherRandom);
-        }
+        emit RequestFulfilled(requestId, randomWords);
+        
+        // Use randomness to determine if the scratcher is a winner (using simple modulo)
+        // In a real implementation, this would use a more complex algorithm
+        bool isWinner = randomness % 100 < 10; // 10% chance of winning
+        
+        // Use the scratch function from the IGoldScratcher interface
+        bool result = goldScratcher.scratch(scratcherId);
+        
+        emit ScratcherRevealed(requestId, user, scratcherId, isWinner);
         
         // Clean up
-        delete pendingScratchers[requestId];
-        
-        emit RandomnessFulfilled(requestId, randomValue);
+        delete requestIdToUser[requestId];
+        delete requestIdToScratcherId[requestId];
     }
     
     /**
-     * @dev Gets a random number in a range for a scratcher
-     * @param scratcherId The ID of the scratcher
-     * @param min The minimum value (inclusive)
-     * @param max The maximum value (inclusive)
-     * @return A random number between min and max
+     * @notice Set the Gold Scratcher contract address
+     * @param _goldScratcher New Gold Scratcher contract address
      */
-    function getRandomNumberInRange(uint256 scratcherId, uint256 min, uint256 max) external view returns (uint256) {
-        require(max >= min, "Max must be >= min");
-        require(scratcherRandomness[scratcherId] != 0, "No randomness for this scratcher");
-        
-        uint256 randomness = scratcherRandomness[scratcherId];
-        uint256 range = max - min + 1;
-        
-        return min + (randomness % range);
+    function setGoldScratcher(address _goldScratcher) external onlyRole(MANAGER_ROLE) {
+        require(_goldScratcher != address(0), "Invalid Gold Scratcher address");
+        goldScratcher = IGoldScratcher(_goldScratcher);
     }
     
     /**
-     * @dev Checks if a scratcher is a winner based on probability
-     * @param scratcherId The ID of the scratcher
-     * @param winProbability The probability of winning (1-10000, where 10000 = 100%)
-     * @return True if the scratcher is a winner
+     * @notice Check if a request exists for a specific user
+     * @param requestId The request ID to check
+     * @return exists Whether the request exists
+     * @return user The user address
+     * @return scratcherId The scratcher ID
      */
-    function isScratcherWinner(uint256 scratcherId, uint256 winProbability) external view returns (bool) {
-        require(winProbability <= 10000, "Probability must be <= 10000");
-        require(scratcherRandomness[scratcherId] != 0, "No randomness for this scratcher");
-        
-        uint256 randomness = scratcherRandomness[scratcherId];
-        uint256 scaled = randomness % 10000;
-        
-        return scaled < winProbability;
-    }
-    
-    /**
-     * @dev Updates the VRF provider
-     * @param _vrfProvider New VRF provider address
-     */
-    function setVRFProvider(address _vrfProvider) external onlyOwner {
-        require(_vrfProvider != address(0), "VRF provider cannot be zero address");
-        vrfProvider = IDragonChainlinkVRF(_vrfProvider);
+    function getRequestDetails(uint64 requestId) external view returns (bool exists, address user, uint256 scratcherId) {
+        user = requestIdToUser[requestId];
+        exists = user != address(0);
+        scratcherId = requestIdToScratcherId[requestId];
     }
 } 

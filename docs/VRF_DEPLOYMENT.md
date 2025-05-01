@@ -30,39 +30,67 @@ The Dragon token system uses a cross-chain VRF solution that:
 
 ## Deployment Steps
 
-### 1. Configure Deployment Parameters
+### 1. Configure Environment Variables
 
-Edit the `test/deployment/deploy_cross_chain_vrf.js` file:
+Create or update your `.env` file with the following variables:
+
+```bash
+# VRF Configuration
+VRF_COORDINATOR_ARBITRUM=0x3C0Ca683b403E37668AE3DC4FB62F4B29B6f7a3e
+VRF_SUBSCRIPTION_ID=65914062761074472397678945586748169687979388122746586980459153805795126649565
+VRF_KEY_HASH=0x8472ba59cf7134dfe321f4d61a430c4857e8b19cdd5230b09952a92671c24409
+LINK_TOKEN_ARBITRUM=0xf97f4df75117a78c1A5a0DBb814Af92458539FB4
+
+# LayerZero Configuration
+LZ_ENDPOINT_ARBITRUM=0x3c2269811836af69497E5F486A85D7316753cf62
+LZ_ENDPOINT_SONIC=0xB4e1Ff7882474BB93042be9AD5E1fA387949B860
+LZ_SONIC_CHAIN_ID=146
+LZ_ARBITRUM_CHAIN_ID=110
+
+# Token Addresses
+WRAPPED_SONIC_ADDRESS=0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38
+DRAGON_TOKEN_ADDRESS=your_deployed_dragon_address
+
+# Deployment Private Keys (KEEP THESE SECURE!)
+ARBITRUM_DEPLOYER_PRIVATE_KEY=your_arbitrum_private_key
+SONIC_DEPLOYER_PRIVATE_KEY=your_sonic_private_key
+```
+
+### 2. Update the Deployment Script
+
+Edit the `test/deployment/deploy_cross_chain_vrf.js` file to use environment variables:
 
 ```javascript
+require('dotenv').config();
+
 // Configuration for Arbitrum deployment
 const ARBITRUM_CONFIG = {
-  vrfCoordinator: "0x3C0Ca683b403E37668AE3DC4FB62F4B29B6f7a3e",
-  subscriptionId: "YOUR_SUBSCRIPTION_ID", // Get from Chainlink VRF UI or create new
-  keyHash: "0x8472ba59cf7134dfe321f4d61a430c4857e8b19cdd5230b09952a92671c24409", // 30 gwei key hash
-  linkToken: "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
-  layerZeroEndpoint: "0x3c2269811836af69497E5F486A85D7316753cf62", 
-  sonicChainId: 231, // Replace with the actual Sonic chain ID in LayerZero
+  vrfCoordinator: process.env.VRF_COORDINATOR_ARBITRUM,
+  subscriptionId: process.env.VRF_SUBSCRIPTION_ID,
+  keyHash: process.env.VRF_KEY_HASH,
+  linkToken: process.env.LINK_TOKEN_ARBITRUM,
+  layerZeroEndpoint: process.env.LZ_ENDPOINT_ARBITRUM,
+  sonicChainId: parseInt(process.env.LZ_SONIC_CHAIN_ID),
 };
 
 // Configuration for Sonic deployment
 const SONIC_CONFIG = {
-  layerZeroEndpoint: "0xB4e1Ff7882474BB93042be9AD5E1fA387949B860",
-  arbitrumChainId: 110, // Arbitrum chain ID in LayerZero
-  wrappedSonic: "0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38", 
-  dragonToken: "YOUR_DEPLOYED_DRAGON_ADDRESS", // Replace with your Dragon token address
+  layerZeroEndpoint: process.env.LZ_ENDPOINT_SONIC,
+  arbitrumChainId: parseInt(process.env.LZ_ARBITRUM_CHAIN_ID),
+  wrappedSonic: process.env.WRAPPED_SONIC_ADDRESS,
+  dragonToken: process.env.DRAGON_TOKEN_ADDRESS,
 };
 ```
 
-### 2. Create Chainlink VRF Subscription on Arbitrum (Pre-Deployment)
+### 3. Create Chainlink VRF Subscription on Arbitrum (Pre-Deployment)
 
 1. Go to the Chainlink VRF Subscription Manager on Arbitrum: https://vrf.chain.link/arbitrum
 2. Connect your wallet
 3. Click "Create Subscription"
 4. Fund the subscription with LINK tokens (minimum 3 LINK recommended)
-5. Make note of the subscription ID for the deployment script
+5. Make note of the subscription ID and update it in your `.env` file
 
-### 3. Deploy the Cross-Chain VRF Contracts
+### 4. Deploy the Cross-Chain VRF Contracts
 
 Run the deployment script:
 
@@ -75,9 +103,9 @@ This script will:
 - Deploy SonicVRFConsumer on Sonic
 - Link them together via LayerZero
 
-### 4. Post-Deployment Configuration
+### 5. Post-Deployment Configuration
 
-#### 4.1 Add VRF Consumer to Subscription
+#### 5.1 Add VRF Consumer to Subscription
 
 After deployment, you need to add the ArbitrumVRFRequester as a consumer:
 
@@ -87,23 +115,30 @@ After deployment, you need to add the ArbitrumVRFRequester as a consumer:
 4. Enter the ArbitrumVRFRequester contract address
 5. Set a gas limit of 500,000 for the VRF callback
 
-#### 4.2 Fund Contracts with ETH
+#### 5.2 Fund Contracts with ETH
 
 Both contracts need ETH for cross-chain messaging:
 
 ```bash
+# Create a .env variable with the deployed addresses
+# VRF_CONSUMER_SONIC=0x...
+# VRF_REQUESTER_ARBITRUM=0x...
+
 # Send ETH to SonicVRFConsumer
-npx hardhat send-eth --to YOUR_SONICVRFCONSUMER_ADDRESS --amount 1.0 --network sonic
+npx hardhat send-eth --to $VRF_CONSUMER_SONIC --amount 1.0 --network sonic
 
 # Send ETH to ArbitrumVRFRequester
-npx hardhat send-eth --to YOUR_ARBITRUMVRFREQUESTER_ADDRESS --amount 0.5 --network arbitrum
+npx hardhat send-eth --to $VRF_REQUESTER_ARBITRUM --amount 0.5 --network arbitrum
 ```
 
-### 5. Connect Dragon Token with VRF Consumer
+### 6. Connect Dragon Token with VRF Consumer
 
 Update the Dragon token to work with the VRF Consumer:
 
 ```bash
+# Add the deployed VRF consumer address to .env
+# VRF_CONSUMER_SONIC=0x...
+
 npx hardhat run --network sonic scripts/connect-dragon-to-vrf.js
 ```
 
@@ -111,15 +146,15 @@ Or manually call:
 
 ```javascript
 // Using ethers.js
-const Dragon = await ethers.getContractAt("Dragon", dragonTokenAddress);
-await Dragon.setVRFConnector(sonicVRFConsumerAddress);
+const Dragon = await ethers.getContractAt("Dragon", process.env.DRAGON_TOKEN_ADDRESS);
+await Dragon.setVRFConnector(process.env.VRF_CONSUMER_SONIC);
 ```
 
-### 6. Setup LayerZero Read (Optional Enhancement)
+### 7. Setup LayerZero Read (Optional Enhancement)
 
 For enhanced VRF functionality:
 
-1. Update the `setup_layerzero_read.js` script with your deployed contract addresses
+1. Update the `setup_layerzero_read.js` script to use environment variables
 2. Run the script:
    ```bash
    npx hardhat run test/deployment/setup_layerzero_read.js --network sonic
@@ -153,6 +188,57 @@ For local testing without actual cross-chain calls:
 ```bash
 # Run the VRF simulation
 npx hardhat run test/scripts/vrf-simulation.js
+```
+
+## Environment Variables Security
+
+### Best Practices
+
+1. **Never commit `.env` files to version control**
+   - Ensure `.env` is in your `.gitignore` file
+   - Use `.env.example` as a template without real values
+
+2. **Restrict access to `.env` files**
+   - Limit file permissions: `chmod 600 .env`
+   - Only share with trusted team members
+
+3. **Use different environment files for different environments**
+   - `.env.development`
+   - `.env.production`
+   - `.env.test`
+
+4. **Rotate sensitive values periodically**
+   - Change private keys after major deployments
+   - Update API keys regularly
+
+### Example `.env.example` file
+
+Create a template that others can use without exposing real values:
+
+```bash
+# VRF Configuration
+VRF_COORDINATOR_ARBITRUM=0x3C0Ca683b403E37668AE3DC4FB62F4B29B6f7a3e
+VRF_SUBSCRIPTION_ID=your_subscription_id
+VRF_KEY_HASH=0x8472ba59cf7134dfe321f4d61a430c4857e8b19cdd5230b09952a92671c24409
+LINK_TOKEN_ARBITRUM=0xf97f4df75117a78c1A5a0DBb814Af92458539FB4
+
+# LayerZero Configuration
+LZ_ENDPOINT_ARBITRUM=0x3c2269811836af69497E5F486A85D7316753cf62
+LZ_ENDPOINT_SONIC=0xB4e1Ff7882474BB93042be9AD5E1fA387949B860
+LZ_SONIC_CHAIN_ID=146
+LZ_ARBITRUM_CHAIN_ID=110
+
+# Token Addresses
+WRAPPED_SONIC_ADDRESS=0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38
+DRAGON_TOKEN_ADDRESS=your_deployed_dragon_address
+
+# Deployment Private Keys (KEEP THESE SECURE!)
+ARBITRUM_DEPLOYER_PRIVATE_KEY=your_arbitrum_private_key
+SONIC_DEPLOYER_PRIVATE_KEY=your_sonic_private_key
+
+# Deployed Contract Addresses
+VRF_CONSUMER_SONIC=your_deployed_vrf_consumer_address
+VRF_REQUESTER_ARBITRUM=your_deployed_vrf_requester_address
 ```
 
 ## Troubleshooting
@@ -238,14 +324,14 @@ npx hardhat run test/scripts/vrf-simulation.js
 1. **Pause VRF if necessary**:
    ```javascript
    // Using ethers.js
-   const SonicVRFConsumer = await ethers.getContractAt("SonicVRFConsumer", sonicVRFConsumerAddress);
+   const SonicVRFConsumer = await ethers.getContractAt("SonicVRFConsumer", process.env.VRF_CONSUMER_SONIC);
    await SonicVRFConsumer.setPaused(true);
    ```
 
 2. **Transfer ownership in emergency**:
    ```javascript
    // Using ethers.js
-   const ArbitrumVRFRequester = await ethers.getContractAt("ArbitrumVRFRequester", arbitrumVRFRequesterAddress);
+   const ArbitrumVRFRequester = await ethers.getContractAt("ArbitrumVRFRequester", process.env.VRF_REQUESTER_ARBITRUM);
    await ArbitrumVRFRequester.transferOwnership(newOwnerAddress);
    ```
 

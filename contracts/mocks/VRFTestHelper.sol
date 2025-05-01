@@ -89,7 +89,7 @@ contract VRFTestHelper is Ownable {
      * @param _user User address
      * @return vrfRequestId The Chainlink VRF request ID
      */
-    function simulateArbitrumVRFRequest(uint64 _requestId, address _user) external returns (uint256) {
+    function simulateArbitrumVRFRequest(uint64 _requestId, address _user) external view returns (uint256) {
         require(requestToUser[_requestId] == _user, "Invalid request");
         
         // In a real scenario, ArbitrumVRFRequester would call Chainlink VRF here

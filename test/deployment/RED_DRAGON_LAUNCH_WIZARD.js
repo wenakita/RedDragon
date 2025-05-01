@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { exec } = require("child_process");
 const readline = require("readline");
+require('dotenv').config();
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -34,21 +35,42 @@ async function launchRedDragon(hre, taskArgs) {
       fs.copyFileSync(contractAddressesTemplatePath, contractAddressesPath);
     }
     
+    // Check if .env file exists
+    const envPath = path.join(process.cwd(), '.env');
+    if (!fs.existsSync(envPath)) {
+      console.log("\n⚠️ WARNING: No .env file found ⚠️");
+      console.log("It's recommended to set up a .env file with your configuration before proceeding.");
+      console.log("Please refer to .env.example for the required variables.");
+      
+      const continueWithoutEnv = await prompt("Do you want to continue without a .env file? (y/n): ");
+      if (continueWithoutEnv.toLowerCase() !== 'y') {
+        console.log("Exiting the wizard. Please set up your .env file and try again.");
+        rl.close();
+        return;
+      }
+    } else {
+      console.log("✅ .env file found");
+    }
+    
     // Initial loading of contract addresses
     let contractAddresses = JSON.parse(fs.readFileSync(contractAddressesPath, "utf8"));
     
     // Step 1: Deploy $DRAGON Token
     console.log("\n== Step 1: Deploy $DRAGON Token ==\n");
-    if (contractAddresses.dragon && contractAddresses.dragon !== "DRAGON_ADDRESS_HERE") {
-      console.log(`$DRAGON Token already deployed at: ${contractAddresses.dragon}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping $DRAGON Token deployment.");
+    // Check if DRAGON_TOKEN_ADDRESS is in .env
+    if (process.env.DRAGON_TOKEN_ADDRESS && process.env.DRAGON_TOKEN_ADDRESS.startsWith("0x")) {
+      console.log(`Found DRAGON_TOKEN_ADDRESS in .env: ${process.env.DRAGON_TOKEN_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new token? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.dragon = process.env.DRAGON_TOKEN_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using DRAGON token from .env: ${process.env.DRAGON_TOKEN_ADDRESS}`);
       } else {
-        await deployDragon();
+        await handleDragonDeployment(contractAddresses);
       }
     } else {
-      await deployDragon();
+      await handleDragonDeployment(contractAddresses);
     }
     
     // Reload contract addresses after dragon deployment
@@ -62,8 +84,16 @@ async function launchRedDragon(hre, taskArgs) {
     console.log("3. Typical ratio is 69% $DRAGON / 31% pair token");
     console.log("4. Add initial liquidity to the pool");
     
-    // Ask for LP token address
-    const lpTokenAddress = await prompt("\nEnter the LP token address (or press Enter to skip if not ready): ");
+    // Check if LP_TOKEN_ADDRESS is in .env
+    let lpTokenAddress = "";
+    if (process.env.LP_TOKEN_ADDRESS && process.env.LP_TOKEN_ADDRESS.startsWith("0x")) {
+      lpTokenAddress = process.env.LP_TOKEN_ADDRESS;
+      console.log(`Found LP_TOKEN_ADDRESS in .env: ${lpTokenAddress}`);
+    } else {
+      // Ask for LP token address
+      lpTokenAddress = await prompt("\nEnter the LP token address (or press Enter to skip if not ready): ");
+    }
+    
     if (lpTokenAddress && lpTokenAddress.startsWith("0x")) {
       contractAddresses.lpToken = lpTokenAddress;
       fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
@@ -72,18 +102,22 @@ async function launchRedDragon(hre, taskArgs) {
       console.log("Skipping LP token address update. You can update it later in config/contract-addresses.json");
     }
     
+    // Continue with remaining deployment steps, checking for environment variables...
     // Step 3: Deploy ve69LP
     console.log("\n== Step 3: Deploy ve69LP ==\n");
-    if (contractAddresses.ve69LP && contractAddresses.ve69LP !== "VE69LP_ADDRESS_HERE") {
-      console.log(`ve69LP already deployed at: ${contractAddresses.ve69LP}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping ve69LP deployment.");
+    if (process.env.VE69LP_ADDRESS && process.env.VE69LP_ADDRESS.startsWith("0x")) {
+      console.log(`Found VE69LP_ADDRESS in .env: ${process.env.VE69LP_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new ve69LP? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.ve69LP = process.env.VE69LP_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using ve69LP from .env: ${process.env.VE69LP_ADDRESS}`);
       } else {
-        await deployVe69LP();
+        await handleVe69LPDeployment(contractAddresses);
       }
     } else {
-      await deployVe69LP();
+      await handleVe69LPDeployment(contractAddresses);
     }
     
     // Reload contract addresses
@@ -91,16 +125,19 @@ async function launchRedDragon(hre, taskArgs) {
     
     // Step 4: Deploy Jackpot
     console.log("\n== Step 4: Deploy Jackpot ==\n");
-    if (contractAddresses.jackpot && contractAddresses.jackpot !== "JACKPOT_ADDRESS_HERE") {
-      console.log(`Jackpot already deployed at: ${contractAddresses.jackpot}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping Jackpot deployment.");
+    if (process.env.JACKPOT_ADDRESS && process.env.JACKPOT_ADDRESS.startsWith("0x")) {
+      console.log(`Found JACKPOT_ADDRESS in .env: ${process.env.JACKPOT_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new Jackpot? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.jackpot = process.env.JACKPOT_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using Jackpot from .env: ${process.env.JACKPOT_ADDRESS}`);
       } else {
-        await deployJackpot();
+        await handleJackpotDeployment(contractAddresses);
       }
     } else {
-      await deployJackpot();
+      await handleJackpotDeployment(contractAddresses);
     }
     
     // Reload contract addresses
@@ -108,16 +145,19 @@ async function launchRedDragon(hre, taskArgs) {
     
     // Step 5: Deploy ve69LPBoost
     console.log("\n== Step 5: Deploy ve69LPBoost ==\n");
-    if (contractAddresses.ve69lpBoost && contractAddresses.ve69lpBoost !== "VE69LP_BOOST_ADDRESS_HERE") {
-      console.log(`ve69LPBoost already deployed at: ${contractAddresses.ve69lpBoost}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping ve69LPBoost deployment.");
+    if (process.env.VE69LP_BOOST_ADDRESS && process.env.VE69LP_BOOST_ADDRESS.startsWith("0x")) {
+      console.log(`Found VE69LP_BOOST_ADDRESS in .env: ${process.env.VE69LP_BOOST_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new ve69LPBoost? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.ve69lpBoost = process.env.VE69LP_BOOST_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using ve69LPBoost from .env: ${process.env.VE69LP_BOOST_ADDRESS}`);
       } else {
-        await deployVe69LPBoost();
+        await handleVe69LPBoostDeployment(contractAddresses);
       }
     } else {
-      await deployVe69LPBoost();
+      await handleVe69LPBoostDeployment(contractAddresses);
     }
     
     // Reload contract addresses
@@ -125,16 +165,19 @@ async function launchRedDragon(hre, taskArgs) {
     
     // Step 6: Deploy ve69LPfeedistributor
     console.log("\n== Step 6: Deploy ve69LPFeeDistributor ==\n");
-    if (contractAddresses.ve69LPFeeDistributor && contractAddresses.ve69LPFeeDistributor !== "VE69LP_FEE_DISTRIBUTOR_ADDRESS_HERE") {
-      console.log(`ve69LPFeeDistributor already deployed at: ${contractAddresses.ve69LPFeeDistributor}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping ve69LPFeeDistributor deployment.");
+    if (process.env.VE69LP_FEE_DISTRIBUTOR_ADDRESS && process.env.VE69LP_FEE_DISTRIBUTOR_ADDRESS.startsWith("0x")) {
+      console.log(`Found VE69LP_FEE_DISTRIBUTOR_ADDRESS in .env: ${process.env.VE69LP_FEE_DISTRIBUTOR_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new ve69LPFeeDistributor? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.ve69LPFeeDistributor = process.env.VE69LP_FEE_DISTRIBUTOR_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using ve69LPFeeDistributor from .env: ${process.env.VE69LP_FEE_DISTRIBUTOR_ADDRESS}`);
       } else {
-        await deployVe69LPFeeDistributor();
+        await handleVe69LPFeeDistributorDeployment(contractAddresses);
       }
     } else {
-      await deployVe69LPFeeDistributor();
+      await handleVe69LPFeeDistributorDeployment(contractAddresses);
     }
     
     // Reload contract addresses
@@ -142,16 +185,19 @@ async function launchRedDragon(hre, taskArgs) {
     
     // Step 7: Deploy DragonLotterySwap
     console.log("\n== Step 7: Deploy DragonLotterySwap ==\n");
-    if (contractAddresses.dragonLotterySwap && contractAddresses.dragonLotterySwap !== "DRAGON_LOTTERY_SWAP_ADDRESS_HERE") {
-      console.log(`DragonLotterySwap already deployed at: ${contractAddresses.dragonLotterySwap}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping DragonLotterySwap deployment.");
+    if (process.env.DRAGON_LOTTERY_SWAP_ADDRESS && process.env.DRAGON_LOTTERY_SWAP_ADDRESS.startsWith("0x")) {
+      console.log(`Found DRAGON_LOTTERY_SWAP_ADDRESS in .env: ${process.env.DRAGON_LOTTERY_SWAP_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new DragonLotterySwap? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.dragonLotterySwap = process.env.DRAGON_LOTTERY_SWAP_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using DragonLotterySwap from .env: ${process.env.DRAGON_LOTTERY_SWAP_ADDRESS}`);
       } else {
-        await deployDragonLotterySwap();
+        await handleDragonLotterySwapDeployment(contractAddresses);
       }
     } else {
-      await deployDragonLotterySwap();
+      await handleDragonLotterySwapDeployment(contractAddresses);
     }
     
     // Reload contract addresses
@@ -159,16 +205,19 @@ async function launchRedDragon(hre, taskArgs) {
     
     // Step 8: Deploy DragonPartnerRegistry
     console.log("\n== Step 8: Deploy DragonPartnerRegistry ==\n");
-    if (contractAddresses.partnerRegistry && contractAddresses.partnerRegistry !== "PARTNER_REGISTRY_ADDRESS_HERE") {
-      console.log(`DragonPartnerRegistry already deployed at: ${contractAddresses.partnerRegistry}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping DragonPartnerRegistry deployment.");
+    if (process.env.PARTNER_REGISTRY_ADDRESS && process.env.PARTNER_REGISTRY_ADDRESS.startsWith("0x")) {
+      console.log(`Found PARTNER_REGISTRY_ADDRESS in .env: ${process.env.PARTNER_REGISTRY_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new DragonPartnerRegistry? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.partnerRegistry = process.env.PARTNER_REGISTRY_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using DragonPartnerRegistry from .env: ${process.env.PARTNER_REGISTRY_ADDRESS}`);
       } else {
-        await deployPartnerRegistry();
+        await handlePartnerRegistryDeployment(contractAddresses);
       }
     } else {
-      await deployPartnerRegistry();
+      await handlePartnerRegistryDeployment(contractAddresses);
     }
     
     // Reload contract addresses
@@ -176,16 +225,19 @@ async function launchRedDragon(hre, taskArgs) {
     
     // Step 9: Deploy ve69LPPoolVoting
     console.log("\n== Step 9: Deploy ve69LPPoolVoting ==\n");
-    if (contractAddresses.ve69LPPoolVoting && contractAddresses.ve69LPPoolVoting !== "VE69LP_POOL_VOTING_ADDRESS_HERE") {
-      console.log(`ve69LPPoolVoting already deployed at: ${contractAddresses.ve69LPPoolVoting}`);
-      const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
-      if (redeploy.toLowerCase() !== 'y') {
-        console.log("Skipping ve69LPPoolVoting deployment.");
+    if (process.env.VE69LP_POOL_VOTING_ADDRESS && process.env.VE69LP_POOL_VOTING_ADDRESS.startsWith("0x")) {
+      console.log(`Found VE69LP_POOL_VOTING_ADDRESS in .env: ${process.env.VE69LP_POOL_VOTING_ADDRESS}`);
+      const useEnvAddress = await prompt("Use this address instead of deploying a new ve69LPPoolVoting? (y/n): ");
+      
+      if (useEnvAddress.toLowerCase() === 'y') {
+        contractAddresses.ve69LPPoolVoting = process.env.VE69LP_POOL_VOTING_ADDRESS;
+        fs.writeFileSync(contractAddressesPath, JSON.stringify(contractAddresses, null, 2));
+        console.log(`Using ve69LPPoolVoting from .env: ${process.env.VE69LP_POOL_VOTING_ADDRESS}`);
       } else {
-        await deployVe69LPPoolVoting();
+        await handleVe69LPPoolVotingDeployment(contractAddresses);
       }
     } else {
-      await deployVe69LPPoolVoting();
+      await handleVe69LPPoolVotingDeployment(contractAddresses);
     }
     
     // Reload contract addresses
@@ -251,6 +303,142 @@ async function executeScript(scriptName) {
       resolve();
     });
   });
+}
+
+/**
+ * Handle Dragon token deployment with checks
+ */
+async function handleDragonDeployment(contractAddresses) {
+  if (contractAddresses.dragon && contractAddresses.dragon !== "DRAGON_ADDRESS_HERE") {
+    console.log(`$DRAGON Token already deployed at: ${contractAddresses.dragon}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping $DRAGON Token deployment.");
+    } else {
+      await deployDragon();
+    }
+  } else {
+    await deployDragon();
+  }
+}
+
+/**
+ * Handle ve69LP deployment with checks
+ */
+async function handleVe69LPDeployment(contractAddresses) {
+  if (contractAddresses.ve69LP && contractAddresses.ve69LP !== "VE69LP_ADDRESS_HERE") {
+    console.log(`ve69LP already deployed at: ${contractAddresses.ve69LP}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping ve69LP deployment.");
+    } else {
+      await deployVe69LP();
+    }
+  } else {
+    await deployVe69LP();
+  }
+}
+
+/**
+ * Handle Jackpot deployment with checks
+ */
+async function handleJackpotDeployment(contractAddresses) {
+  if (contractAddresses.jackpot && contractAddresses.jackpot !== "JACKPOT_ADDRESS_HERE") {
+    console.log(`Jackpot already deployed at: ${contractAddresses.jackpot}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping Jackpot deployment.");
+    } else {
+      await deployJackpot();
+    }
+  } else {
+    await deployJackpot();
+  }
+}
+
+/**
+ * Handle ve69LPBoost deployment with checks
+ */
+async function handleVe69LPBoostDeployment(contractAddresses) {
+  if (contractAddresses.ve69lpBoost && contractAddresses.ve69lpBoost !== "VE69LP_BOOST_ADDRESS_HERE") {
+    console.log(`ve69LPBoost already deployed at: ${contractAddresses.ve69lpBoost}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping ve69LPBoost deployment.");
+    } else {
+      await deployVe69LPBoost();
+    }
+  } else {
+    await deployVe69LPBoost();
+  }
+}
+
+/**
+ * Handle ve69LPFeeDistributor deployment with checks
+ */
+async function handleVe69LPFeeDistributorDeployment(contractAddresses) {
+  if (contractAddresses.ve69LPFeeDistributor && contractAddresses.ve69LPFeeDistributor !== "VE69LP_FEE_DISTRIBUTOR_ADDRESS_HERE") {
+    console.log(`ve69LPFeeDistributor already deployed at: ${contractAddresses.ve69LPFeeDistributor}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping ve69LPFeeDistributor deployment.");
+    } else {
+      await deployVe69LPFeeDistributor();
+    }
+  } else {
+    await deployVe69LPFeeDistributor();
+  }
+}
+
+/**
+ * Handle DragonLotterySwap deployment with checks
+ */
+async function handleDragonLotterySwapDeployment(contractAddresses) {
+  if (contractAddresses.dragonLotterySwap && contractAddresses.dragonLotterySwap !== "DRAGON_LOTTERY_SWAP_ADDRESS_HERE") {
+    console.log(`DragonLotterySwap already deployed at: ${contractAddresses.dragonLotterySwap}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping DragonLotterySwap deployment.");
+    } else {
+      await deployDragonLotterySwap();
+    }
+  } else {
+    await deployDragonLotterySwap();
+  }
+}
+
+/**
+ * Handle DragonPartnerRegistry deployment with checks
+ */
+async function handlePartnerRegistryDeployment(contractAddresses) {
+  if (contractAddresses.partnerRegistry && contractAddresses.partnerRegistry !== "PARTNER_REGISTRY_ADDRESS_HERE") {
+    console.log(`DragonPartnerRegistry already deployed at: ${contractAddresses.partnerRegistry}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping DragonPartnerRegistry deployment.");
+    } else {
+      await deployPartnerRegistry();
+    }
+  } else {
+    await deployPartnerRegistry();
+  }
+}
+
+/**
+ * Handle ve69LPPoolVoting deployment with checks
+ */
+async function handleVe69LPPoolVotingDeployment(contractAddresses) {
+  if (contractAddresses.ve69LPPoolVoting && contractAddresses.ve69LPPoolVoting !== "VE69LP_POOL_VOTING_ADDRESS_HERE") {
+    console.log(`ve69LPPoolVoting already deployed at: ${contractAddresses.ve69LPPoolVoting}`);
+    const redeploy = await prompt("Do you want to redeploy it? (y/n): ");
+    if (redeploy.toLowerCase() !== 'y') {
+      console.log("Skipping ve69LPPoolVoting deployment.");
+    } else {
+      await deployVe69LPPoolVoting();
+    }
+  } else {
+    await deployVe69LPPoolVoting();
+  }
 }
 
 /**

@@ -14,6 +14,13 @@ interface ISonicVRFConsumer {
     function onSwapWSToDragon(address user, uint256 amount) external;
     
     /**
+     * @notice Request randomness for a user
+     * @param _user The address of the user to request randomness for
+     * @return requestId The ID of the randomness request
+     */
+    function requestRandomness(address _user) external returns (uint64);
+    
+    /**
      * @notice Add funds to the jackpot
      * @param amount The amount to add
      */

@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.20;
 
+import "../../contracts/DragonSwapTrigger.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "../../contracts/interfaces/IVRFConsumer.sol";
 
 /**
  * @title MockDragonSwapTrigger
- * @dev Mock contract for testing cross-chain VRF functionality
+ * @dev Mock implementation of the Dragon Swap Trigger for testing
  */
-contract MockDragonSwapTrigger {
+contract MockDragonSwapTrigger is DragonSwapTrigger {
     // Token addresses
     address public wrappedSonicAddress;
     address public dragonTokenAddress;
@@ -21,6 +23,7 @@ contract MockDragonSwapTrigger {
     
     // Request tracking
     mapping(uint256 => address) public requestToUser;
+    mapping(uint256 => uint256) public requestToAmount;
     uint256 public requestCounter;
     
     // Events
@@ -28,42 +31,50 @@ contract MockDragonSwapTrigger {
     event VRFRequested(uint256 indexed requestId, address indexed user);
     event JackpotWon(address indexed winner, uint256 amount);
     event JackpotAdded(uint256 amount, uint256 newBalance);
+    event RandomnessRequested(uint64 indexed requestId, address indexed user);
     
+    /**
+     * @dev Constructor
+     */
     constructor(
-        address _wrappedSonicAddress,
-        address _dragonTokenAddress,
-        address _sonicVRFReceiverAddress
+        address _wrappedSonic,
+        address _dragonToken,
+        address _vrfConsumer,
+        uint256 _minSwapAmount
+    ) DragonSwapTrigger(
+        _wrappedSonic,
+        _dragonToken,
+        _vrfConsumer,
+        _minSwapAmount
     ) {
-        wrappedSonicAddress = _wrappedSonicAddress;
-        dragonTokenAddress = _dragonTokenAddress;
-        sonicVRFReceiverAddress = _sonicVRFReceiverAddress;
+        wrappedSonicAddress = _wrappedSonic;
+        dragonTokenAddress = _dragonToken;
+        sonicVRFReceiverAddress = _vrfConsumer;
     }
     
     /**
-     * @dev Triggered when a user swaps wS for DRAGON
+     * @notice Triggered when a user swaps wS for DRAGON
+     * @param _user The user who performed the swap
+     * @param _amount The amount of wS swapped
      */
-    function onSwapWSToDragon(address _user, uint256 _amount) external {
-        // Only DRAGON token should call this in production, but for tests we allow all
+    function onSwapWSToDragon(address _user, uint256 _amount) external override {
+        // Only allow tx.origin to participate to prevent proxy/contract entries
+        require(tx.origin == _user, "Only users can enter lottery");
         
-        // Assign a request ID
-        uint256 requestId = requestCounter++;
+        // Check if amount is enough to enter
+        if (_amount < minSwapAmount) {
+            return;
+        }
         
-        // Store the user for this request
+        // Request randomness
+        uint64 requestId = IVRFConsumer(vrfConsumer).requestRandomness(_user);
+        
+        // Store mapping
         requestToUser[requestId] = _user;
+        requestToAmount[requestId] = _amount;
         
-        // In production, this would call the VRF service
-        // For tests, we just emit the event
         emit SwapDetected(_user, _amount);
-        emit VRFRequested(requestId, _user);
-        
-        // Request randomness from VRF service
-        (bool success, ) = sonicVRFReceiverAddress.call(
-            abi.encodeWithSignature(
-                "requestRandomness(uint256)",
-                requestId
-            )
-        );
-        require(success, "Failed to request randomness");
+        emit RandomnessRequested(requestId, _user);
     }
     
     /**

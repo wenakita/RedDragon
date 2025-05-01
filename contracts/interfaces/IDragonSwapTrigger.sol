@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.20;
 
 /**
  * @title IDragonSwapTrigger
- * @dev Interface for the DragonSwapTrigger contract
+ * @dev Interface for the Dragon Swap Trigger that handles lottery entries
  */
 interface IDragonSwapTrigger {
     /**
-     * @notice Triggered when a user swaps wS for DRAGON
+     * @notice Triggered when a user swaps native token for DRAGON
      * @param _user The user who performed the swap
-     * @param _amount The amount of wS swapped
+     * @param _amount The amount of native token swapped
      */
-    function onSwapWSToDragon(address _user, uint256 _amount) external;
+    function onSwapNativeTokenToDragon(address _user, uint256 _amount) external;
     
     /**
      * @notice Add funds to the jackpot
@@ -23,7 +23,7 @@ interface IDragonSwapTrigger {
      * @notice Get the current jackpot balance
      * @return The jackpot balance
      */
-    function jackpotBalance() external view returns (uint256);
+    function getJackpotBalance() external view returns (uint256);
     
     /**
      * @notice Set the win threshold
@@ -45,8 +45,14 @@ interface IDragonSwapTrigger {
     function fulfillRandomness(uint256 _requestId, uint256 _randomness) external;
     
     /**
-     * @notice Update the SonicVRFReceiver address
-     * @param _sonicVRFReceiverAddress The new address
+     * @notice Update the VRF consumer address
+     * @param _vrfConsumerAddress The new address
      */
-    function setSonicVRFReceiver(address _sonicVRFReceiverAddress) external;
+    function setVRFConsumer(address _vrfConsumerAddress) external;
+    
+    /**
+     * @notice Get the native token wrapper address used by this swap trigger
+     * @return The native token wrapper address
+     */
+    function getNativeTokenWrapper() external view returns (address);
 } 

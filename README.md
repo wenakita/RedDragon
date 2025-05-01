@@ -1,113 +1,104 @@
-## Foundry
+# 🔥 DRAGON Lottery System
 
-[![VRF Tests](https://github.com/yourusername/SonicRedDragon/actions/workflows/vrf-tests.yml/badge.svg)](https://github.com/yourusername/SonicRedDragon/actions/workflows/vrf-tests.yml)
+A provably fair, cross-chain lottery system for the DRAGON protocol. Users who swap Wrapped Sonic (wS) for DRAGON tokens are automatically entered into a jackpot lottery with a chance to win based on their swap amount and ve69LP holdings.
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## 📚 Documentation
 
-Foundry consists of:
+The DRAGON lottery system utilizes several key components:
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- **Provably Fair Randomness**: Cross-chain VRF implementation using Chainlink via LayerZero
+- **Dynamic Probability**: User's chance scales with swap size and ve69LP holdings
+- **Self-Funding Jackpot**: 6.9% of all DRAGON buy/sell fees go to the jackpot
+- **Sustainable Distribution**: 69% goes to winners, 31% seeds the next jackpot
 
-## Documentation
+## 🧮 Probability Calculation
 
-https://book.getfoundry.sh/
+The lottery uses a dual-component probability system:
 
-## Usage
+1. **USD-Based Linear Probability**:
+   - $1 swap = 0.0004% chance (4 in 1,000,000)
+   - $10,000 swap = 4% chance (4 in 100)
+   - Linear scaling between these points
 
-### Build
+2. **ve69LP Voting Power Boost**:
+   - Up to 2.5x multiplier based on ve69LP voting power
+   - Cube root scaling for fair distribution and diminishing returns
 
-```shell
-$ forge build
+## 💲 Jackpot Size
+
+The DRAGON lottery jackpot typically averages:
+- ~$18,000-$25,000 total jackpot
+- ~$12,500-$17,250 payout to winners (69%)
+- 31% retention to seed the next jackpot
+
+## 🔒 Security Features
+
+The lottery implementation includes several critical security features:
+
+- **Source Verification**: Only accepts randomness from authorized sources
+- **Cross-Chain Security**: LayerZero provides secure message passing
+- **tx.origin Check**: Prevents contracts from entering on behalf of users
+- **Sybil Attack Prevention**: Minimum swap threshold and natural gas disincentives
+
+## 📂 Repository Structure
+
+- **contracts/**: Smart contract implementations
+  - **vrf/**: VRF implementation contracts
+  - **lottery/**: Lottery-specific contracts
+  - **interfaces/**: Contract interfaces
+- **docs/**: Comprehensive documentation
+  - **lottery/**: Lottery system documentation
+- **test/**: Test suite for lottery and VRF functionality
+
+## 👨‍💻 Core Contracts
+
+1. **DragonSwapTriggerV2.sol**: Main lottery contract that detects swaps and processes randomness
+2. **SonicVRFConsumer.sol**: Handles VRF requests on Sonic chain
+3. **ArbitrumVRFRequester.sol**: Interfaces with Chainlink VRF on Arbitrum
+4. **DragonJackpotVault.sol**: Manages jackpot accumulation from fees
+
+## 🖼️ Architecture Diagram
+
+```
+┌─────────────────┐      ┌───────────────┐      ┌──────────────────┐
+│                 │      │               │      │                  │
+│  Sonic Chain    │ ──── │ LayerZero     │ ──── │ Arbitrum Chain   │
+│  (Lottery)      │      │ (Bridge)      │      │ (VRF Source)     │
+│                 │      │               │      │                  │
+└─────────────────┘      └───────────────┘      └──────────────────┘
 ```
 
-### Test
+## 📈 Links
 
-```shell
-$ forge test
-```
+- [Website](https://sonicreddragon.io)
+- [Telegram](https://t.me/sonicreddragon)
+- [Twitter](https://x.com/sonicreddragon)
 
-### Format
+## 📜 License
 
-```shell
-$ forge fmt
-```
+MIT
 
-### Gas Snapshots
+## Native Token Swap Testing
 
-```shell
-$ forge snapshot
-```
+This repository includes comprehensive testing for native token swapping across multiple chains. The framework ensures consistent swap behavior, lottery mechanics, and fee application across all supported chains.
 
-### Anvil
+### Test Components
 
-```shell
-$ anvil
-```
+- **[CrossChainTokenSwapTest.js](test/CrossChainTokenSwapTest.js)**: Main test suite for cross-chain token swapping
+- **Mock Contracts**:
+  - `MockWETH.sol`: Simulates wrapped native tokens
+  - `MockVRFConsumer.sol`: Mocks randomness generation
+  - `MockJackpotVault.sol` and `MockVe69LPFeeDistributor.sol`: Mock fee receivers
+  - `MockLzEndpoint.sol`: Simulates LayerZero cross-chain communication
 
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
-
-## VRF Implementation Testing
-
-The project includes comprehensive tests for the cross-chain VRF (Verifiable Random Function) implementation, which connects the Sonic and Arbitrum chains through LayerZero.
-
-### Testing Framework
-
-We use two testing frameworks:
-
-1. **Hardhat**: For JavaScript-based testing
-2. **Forge**: For Solidity-based testing
-
-### Key VRF Test Files
-
-- **test/vrf-implementation.test.js**: JavaScript tests for the VRF implementation
-- **contracts/mocks/VRFTestHelper.sol**: Helper contract for testing VRF functionality
-- **test/forge/CrossChainVRFTest.t.sol**: Forge tests for cross-chain VRF flow
-- **test/forge/VRFReadTest.t.sol**: Forge tests for lzRead functionality
-- **test/forge/VRFFallbackTest.t.sol**: Forge tests for error handling and recovery
-
-### Running the Tests
-
-#### Hardhat Tests
+### Running Tests
 
 ```bash
-npx hardhat test test/vrf-implementation.test.js
+# Run the complete test framework
+node scripts/test-native-token-swap.js
+
+# Run individual tests
+npx hardhat test test/CrossChainTokenSwapTest.js
 ```
 
-#### Forge Tests
-
-```bash
-forge test --match-path test/forge/VRF*.t.sol -vvv
-```
-
-For more detailed instructions on testing the VRF implementation, see [VRF-TESTING-GUIDE.md](./VRF-TESTING-GUIDE.md).
-
-### VRF Implementation Details
-
-Our VRF implementation follows these principles:
-
-1. **Cross-Chain Randomness**: Requests from Sonic chain, fulfillment on Arbitrum via Chainlink VRF
-2. **Secure Flow**: Proper validation of source chains, addresses, and request IDs
-3. **Recovery Mechanisms**: Retry functionality for failed message delivery or VRF outages
-4. **Administrative Controls**: Owner-only parameter updates with proper access controls
-5. **Error Handling**: Graceful handling of failures in the randomness processing pipeline
+For more details, see [NATIVE-TOKEN-SWAP-TESTING.md](docs/NATIVE-TOKEN-SWAP-TESTING.md). 

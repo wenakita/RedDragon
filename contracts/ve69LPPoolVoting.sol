@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/Ive69LP.sol";
-import "./DragonPartnerRegistry.sol";
+import "./partner/DragonPartnerRegistry.sol";
 
 /**
  * @title ve69LPPoolVoting
@@ -84,8 +84,11 @@ contract ve69LPPoolVoting is Ownable {
      * @param _partnerId ID of the partner to vote for
      */
     function vote(uint256 _partnerId) external {
+        // Get partner address from ID
+        address partnerAddress = partnerRegistry.partnerList(_partnerId);
+        
         // Verify partner exists and is active
-        (address partnerAddress, , , bool isActive, ) = partnerRegistry.getPartner(_partnerId);
+        bool isActive = partnerRegistry.isPartnerActive(partnerAddress);
         require(partnerAddress != address(0), "Partner does not exist");
         require(isActive, "Partner is not active");
         
@@ -93,7 +96,7 @@ contract ve69LPPoolVoting is Ownable {
         updatePeriodIfNeeded();
         
         // Get user's voting power
-        uint256 votingPower = ve69LP.balanceOf(msg.sender);
+        uint256 votingPower = ve69LP.votingPowerOf(msg.sender);
         require(votingPower >= minVotingPower, "Insufficient voting power");
         
         // If user has already voted in this period, remove their previous vote
@@ -116,8 +119,11 @@ contract ve69LPPoolVoting is Ownable {
      * @param _newPartnerId New partner ID to vote for
      */
     function changeVote(uint256 _oldPartnerId, uint256 _newPartnerId) external {
+        // Get partner address from ID
+        address newPartnerAddress = partnerRegistry.partnerList(_newPartnerId);
+        
         // Verify new partner exists and is active
-        (address newPartnerAddress, , , bool isActive, ) = partnerRegistry.getPartner(_newPartnerId);
+        bool isActive = partnerRegistry.isPartnerActive(newPartnerAddress);
         require(newPartnerAddress != address(0), "New partner does not exist");
         require(isActive, "New partner is not active");
         
@@ -145,7 +151,7 @@ contract ve69LPPoolVoting is Ownable {
      */
     function removeVote(address user) internal {
         // Find all partners the user voted for
-        for (uint256 i = 1; i < partnerRegistry.nextPartnerId(); i++) {
+        for (uint256 i = 0; i < partnerRegistry.getPartnerCount(); i++) {
             uint256 userVoteAmount = userVotes[currentPeriod][user][i];
             if (userVoteAmount > 0) {
                 // Remove votes
@@ -177,7 +183,7 @@ contract ve69LPPoolVoting is Ownable {
         
         // If no votes, reset all boosts
         if (totalVotes == 0) {
-            for (uint256 i = 1; i < partnerRegistry.nextPartnerId(); i++) {
+            for (uint256 i = 0; i < partnerRegistry.getPartnerCount(); i++) {
                 if (partnerProbabilityBoost[i] > 0) {
                     partnerProbabilityBoost[i] = 0;
                     emit PartnerBoostUpdated(i, 0);
@@ -185,7 +191,7 @@ contract ve69LPPoolVoting is Ownable {
             }
         } else {
             // Calculate boost for each partner
-            for (uint256 i = 1; i < partnerRegistry.nextPartnerId(); i++) {
+            for (uint256 i = 0; i < partnerRegistry.getPartnerCount(); i++) {
                 uint256 votes = partnerVotes[currentPeriod][i];
                 
                 // Calculate partner's share of the boost
@@ -220,9 +226,13 @@ contract ve69LPPoolVoting is Ownable {
      * @return Probability boost in basis points (e.g., 100 = 1%)
      */
     function getPartnerProbabilityBoostByAddress(address _partner) external view returns (uint256) {
-        uint256 partnerId = partnerRegistry.getPartnerIdByAddress(_partner);
-        if (partnerId == 0) return 0;
-        return partnerProbabilityBoost[partnerId];
+        // Iterate through partner list to find matching address
+        for (uint256 i = 0; i < partnerRegistry.getPartnerCount(); i++) {
+            if (partnerRegistry.partnerList(i) == _partner) {
+                return partnerProbabilityBoost[i];
+            }
+        }
+        return 0;
     }
     
     /**

@@ -39,10 +39,15 @@ SonicRedDragon/
 
 ## Contract Organization
 
-- `Dragon.sol`: Main token contract
-- `DragonLotterySwap.sol`: Primary lottery implementation
-- `ve69LP.sol`: Voting escrow token implementation
+- `OmniDragon.sol`: Main token contract with LayerZero cross-chain functionality
+- `OmniDragonDeployer.sol`: Deterministic deployer for OmniDragon
+- `ChainSpecificSwapTrigger.sol`: Base abstract contract for chain-specific lottery implementations
+- `SonicDragonSwapTrigger.sol`: Sonic chain implementation of lottery functionality
+- `BaseDragonSwapTrigger.sol`: Base chain implementation of lottery functionality
+- `ChainRegistry.sol`: Registry for managing chain-specific configurations
 - `ve69LPFeeDistributor.sol`: Fee distribution for ve69LP holders
+- `ve69LPBoost.sol`: Handles voting power boost calculations
+- `DragonJackpotVault.sol`: Vault for storing jackpot rewards
 
 ## Documentation
 

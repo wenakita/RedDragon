@@ -1,32 +1,35 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.20;
 
 /**
  * @title MockVRFCoordinator
- * @dev Mock contract to simulate Chainlink VRF Coordinator v2 for testing
+ * @dev Mock VRF Coordinator for testing VRF integration with BaseDragonSwapTrigger
  */
 contract MockVRFCoordinator {
-    struct Subscription {
-        uint96 balance;
-        uint64 reqCount;
+    // Request tracking
+    uint256 private requestCounter;
+    mapping(uint256 => address) public s_consumers;
+    bool public willFulfill;
+    uint256 public lastRequestId;
+    
+    struct RequestConfig {
+        bytes32 keyHash;
+        uint64 subId;
+        uint16 minConfirmations;
+        uint32 callbackGasLimit;
+        uint32 numWords;
     }
     
-    // Track subscriptions for testing
-    mapping(uint64 => Subscription) public subscriptions;
-    
-    // Track requests
-    mapping(uint256 => address) public consumers;
-    uint256 private requestCounter;
+    mapping(uint256 => RequestConfig) public s_requests;
     
     event RandomWordsRequested(
         bytes32 indexed keyHash,
         uint256 requestId,
-        uint256 preSeed,
         uint64 subId,
         uint16 minimumRequestConfirmations,
         uint32 callbackGasLimit,
         uint32 numWords,
-        address indexed sender
+        address indexed requester
     );
     
     event RandomWordsFulfilled(
@@ -36,58 +39,89 @@ contract MockVRFCoordinator {
     );
     
     /**
-     * @dev Create and fund a subscription for testing
+     * @notice Set whether the mock coordinator should fulfill requests
+     * @param _willFulfill True if requests should be fulfilled automatically
      */
-    function fundSubscription(uint64 subId, uint96 amount) external {
-        Subscription storage sub = subscriptions[subId];
-        sub.balance += amount;
+    function setWillFulfill(bool _willFulfill) external {
+        willFulfill = _willFulfill;
     }
     
     /**
-     * @dev Simulates requestRandomWords from the VRF Coordinator
+     * @notice Get the last request ID
+     * @return The last request ID
+     */
+    function getLastRequestId() external view returns (uint256) {
+        return lastRequestId;
+    }
+    
+    /**
+     * @notice Mock function to request random words
+     * @param keyHash Key hash
+     * @param subId Subscription ID
+     * @param minimumRequestConfirmations Minimum confirmations
+     * @param callbackGasLimit Callback gas limit
+     * @param numWords Number of random words
+     * @return requestId The request ID
      */
     function requestRandomWords(
         bytes32 keyHash,
         uint64 subId,
-        uint16 requestConfirmations,
+        uint16 minimumRequestConfirmations,
         uint32 callbackGasLimit,
         uint32 numWords
     ) external returns (uint256) {
-        // Validate subscription
-        require(subscriptions[subId].balance > 0, "Not enough funds in subscription");
+        requestCounter++;
+        uint256 requestId = requestCounter;
+        lastRequestId = requestId;
         
-        // Create request
-        uint256 requestId = requestCounter++;
-        consumers[requestId] = msg.sender;
+        s_consumers[requestId] = msg.sender;
+        s_requests[requestId] = RequestConfig({
+            keyHash: keyHash,
+            subId: subId,
+            minConfirmations: minimumRequestConfirmations,
+            callbackGasLimit: callbackGasLimit,
+            numWords: numWords
+        });
         
         emit RandomWordsRequested(
             keyHash,
             requestId,
-            uint256(keccak256(abi.encodePacked(keyHash, requestId))),
             subId,
-            requestConfirmations,
+            minimumRequestConfirmations,
             callbackGasLimit,
             numWords,
             msg.sender
         );
         
+        if (willFulfill) {
+            // Generate random words
+            uint256[] memory randomWords = new uint256[](numWords);
+            for (uint256 i = 0; i < numWords; i++) {
+                randomWords[i] = uint256(keccak256(abi.encode(requestId, i)));
+            }
+            
+            // Fulfill the request
+            fulfillRandomWords(requestId, s_consumers[requestId], randomWords);
+        }
+        
         return requestId;
     }
     
     /**
-     * @dev Function to simulate the VRF Coordinator fulfilling a request
+     * @notice Fulfill randomness request
+     * @param requestId Request ID
+     * @param consumer Consumer address
+     * @param randomWords Random words
      */
     function fulfillRandomWords(
         uint256 requestId,
         address consumer,
         uint256[] memory randomWords
-    ) external {
-        require(consumers[requestId] == consumer, "Consumer not found for request");
-        
-        // Call the consumer contract with the random words
+    ) public {
+        // Call rawFulfillRandomWords on the consumer
         (bool success, ) = consumer.call(
             abi.encodeWithSignature(
-                "fulfillRandomWords(uint256,uint256[])",
+                "rawFulfillRandomWords(uint256,uint256[])",
                 requestId,
                 randomWords
             )

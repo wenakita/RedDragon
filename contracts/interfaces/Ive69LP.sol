@@ -1,36 +1,75 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.9;
 
 /**
  * @title Ive69LP
- * @dev Interface for the Voting Escrow 69 LP token (ve69LP)
+ * @dev Interface for Voting Escrow 69LP token
+ * Defines the functions for locking and calculating voting power
  */
 interface Ive69LP {
     /**
-     * @notice Get the voting power of an account
-     * @param _account The account address
-     * @return The voting power
+     * @dev Lock tokens for voting power
+     * @param amount Amount to lock
+     * @param duration Lock duration in seconds
      */
-    function getVotingPower(address _account) external view returns (uint256);
+    function lock(uint256 amount, uint256 duration) external;
     
     /**
-     * @notice Get the total voting power
-     * @return The total voting power
+     * @dev Unlock tokens after lock period
+     */
+    function unlock() external;
+    
+    /**
+     * @dev Extend lock duration
+     * @param duration Additional lock duration in seconds
+     */
+    function extendLock(uint256 duration) external;
+    
+    /**
+     * @dev Add more tokens to an existing lock
+     * @param amount Amount to add
+     */
+    function increaseLock(uint256 amount) external;
+    
+    /**
+     * @dev Get locked balance of an account
+     * @param account Address to check
+     * @return amount Locked token amount
+     */
+    function lockedBalanceOf(address account) external view returns (uint256);
+    
+    /**
+     * @dev Get unlock time of an account's lock
+     * @param account Address to check
+     * @return unlockTime Unlock timestamp
+     */
+    function unlockTimeOf(address account) external view returns (uint256);
+    
+    /**
+     * @dev Calculate voting power of an account
+     * @param account Address to get voting power for
+     * @return voting power value
+     */
+    function votingPowerOf(address account) external view returns (uint256);
+    
+    /**
+     * @dev Get total voting power
+     * @return total voting power
      */
     function getTotalVotingPower() external view returns (uint256);
     
     /**
-     * @notice Get the locked balance of an account
-     * @param _account The account address
-     * @return The locked balance
+     * @dev Get total locked supply
+     * @return total locked supply
      */
-    function getLockedBalance(address _account) external view returns (uint256);
+    function totalLockedSupply() external view returns (uint256);
     
     /**
-     * @notice Get the unlock time of an account's lock
-     * @param _account The account address
-     * @return The unlock timestamp
+     * @dev Get voting power of a user
+     * Alias for votingPowerOf for backward compatibility
+     * @param account Address to get voting power for
+     * @return voting power value
      */
-    function getUnlockTime(address _account) external view returns (uint256);
+    function getVotingPower(address account) external view returns (uint256);
 }

@@ -78,7 +78,7 @@ contract ve69LPFeeDistributor is Ownable, ReentrancyGuard {
         currentEpoch = 0;
         
         // Take initial snapshot of total voting power
-        epochTotalVotingPower[currentEpoch] = veToken.totalVotingPower();
+        epochTotalVotingPower[currentEpoch] = veToken.getTotalVotingPower();
     }
     
     /**
@@ -129,7 +129,7 @@ contract ve69LPFeeDistributor is Ownable, ReentrancyGuard {
             epochStartTime += EPOCH_DURATION;
             
             // Take snapshot of total voting power for the new epoch
-            epochTotalVotingPower[currentEpoch] = veToken.totalVotingPower();
+            epochTotalVotingPower[currentEpoch] = veToken.getTotalVotingPower();
             
             emit EpochAdvanced(currentEpoch, epochTotalVotingPower[currentEpoch]);
         }
@@ -144,7 +144,7 @@ contract ve69LPFeeDistributor is Ownable, ReentrancyGuard {
         require(!userEpochClaimed[msg.sender][_epoch], "Already claimed for this epoch");
         require(epochRewards[_epoch] > 0, "No rewards for this epoch");
         
-        uint256 userVotingPower = veToken.balanceOf(msg.sender);
+        uint256 userVotingPower = veToken.getVotingPower(msg.sender);
         require(userVotingPower > 0, "No voting power in epoch");
         
         uint256 totalVotingPower = epochTotalVotingPower[_epoch];
@@ -194,4 +194,4 @@ contract ve69LPFeeDistributor is Ownable, ReentrancyGuard {
         tokenContract.safeTransfer(to, withdrawAmount);
         emit EmergencyWithdrawal(to, withdrawAmount, token);
     }
-} 
+}

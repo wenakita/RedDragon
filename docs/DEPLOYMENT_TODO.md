@@ -1,10 +1,10 @@
 # Red Dragon Project Deployment TODO
 
 ## Deployed Contracts
-- ✅ DragonPartnerRegistry: `0x94b1381E5E66d825a3484128459375a0fFAdb3B2`
-- ✅ DragonPartnerRouter: `0x84Be1F47691b89A5645C4B14e41f4c274646B214`
-- ✅ ve69LPPoolVoting: `0xB8094a7B421c58fa30e8EdF2a46d6E56B00648be`
-- ✅ SimpleShadowAdapter: `0xEac751F85Cd373A48873A6a87ba6968D292b6c66`
+- ✅ DragonPartnerRegistry: ``
+- ✅ DragonPartnerRouter: ``
+- ✅ ve69LPPoolVoting: ``
+- ✅ SimpleShadowAdapter: ``
 
 ## Pending Tasks
 
@@ -31,9 +31,9 @@
 - [ ] Check probability boost allocations
 
 ## Token Addresses
-- Dragon ($DRAGON): `0x5a2e7C9f5164368B250Af2c2cdc4709c908fA686`
-- BeetsLP (Dragon/wS): `0xeA2271DAD89385119A88Ce0BB957DEf053aE560A`
-- Wrapped Sonic (wS): `0x039e2fb66102314ce7b64ce5ce3e5183bc94ad38`
+- Dragon ($DRAGON): ``
+- BeetsLP (Dragon/wS): ``
+- Wrapped Sonic (wS): ``
 - Shadow Token: `0x3333b97138D4b086720b5aE8A7844b1345a33333`
 - xShadow Token: `0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424`
 
