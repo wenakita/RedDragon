@@ -1,0 +1,4 @@
+# Deployment Private Key
+# Replace this text with your actual private key (without 0x prefix)
+# WARNING: Never commit the actual private key file to git
+# WARNING: Keep your private key secure and never share it 

@@ -1,0 +1,17 @@
+{
+  "dragon": "",
+  "lpToken": "",
+  "ve69LP": "",
+  "jackpot": "",
+  "ve69lpBoost": "",
+  "ve69LPFeeDistributor": "",
+  "dragonLotterySwap": "",
+  "vrf": {
+    "coordinator": ""
+  },
+  "constants": {
+    "chainId": 146,
+    "rpcUrl": "https://rpc.soniclabs.com"
+  },
+  "wrappedSonic": "0x6fa354d5aa8cba24622ab6ec0f23198a1263c147"
+}
