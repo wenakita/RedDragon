@@ -18,15 +18,6 @@ contract DragonMathLibWrapper {
         return DragonMathLib.calculateVotingPower(amount);
     }
     
-    function calculateTimedVotingPower(
-        uint256 amount,
-        uint256 unlockTime,
-        uint256 currentTime,
-        uint256 maxLockTime
-    ) public pure returns (uint256) {
-        return DragonMathLib.calculateTimedVotingPower(amount, unlockTime, currentTime, maxLockTime);
-    }
-    
     function calculateBoostMultiplier(
         uint256 userBalance,
         uint256 totalSupply,
@@ -36,14 +27,6 @@ contract DragonMathLibWrapper {
     ) public pure returns (uint256) {
         // Ignoring the boostPrecision parameter as it's no longer used in the library
         return DragonMathLib.calculateBoostMultiplier(userBalance, totalSupply, baseBoost, maxBoost);
-    }
-    
-    function calculateWeightedAverage(
-        uint256[] memory values,
-        uint256[] memory weights,
-        uint256 precision
-    ) public pure returns (uint256) {
-        return DragonMathLib.calculateWeightedAverage(values, weights, precision);
     }
     
     function normalizeWeights(
