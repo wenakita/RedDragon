@@ -119,10 +119,23 @@ This repository has been cleaned up and organized for better maintainability:
   - `guides/`: Usage and implementation guides
   - `testing/`: Testing procedures and results
 
+### Configuration
+- `config/`: All configuration files
+  - `docs/`: Documentation configuration
+  - `hardhat-backups/`: Backup configuration files
+  - `workflows/`: GitHub workflow configurations
+
 ### Development
 - `scripts/`: Deployment and utility scripts
+  - `run-tests.sh`: Helper script to run tests
 - `lib/`: External libraries and dependencies
 
-### Configuration
-- `hardhat.config.js`: Main Hardhat configuration
-- `foundry.toml`: Foundry configuration for tests 
+### Running Tests
+
+```bash
+# Run math library tests
+./scripts/run-tests.sh math
+
+# Run all tests
+./scripts/run-tests.sh all
+``` 
