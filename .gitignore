@@ -7,6 +7,18 @@ npm-debug.log
 yarn-error.log
 .parcel-cache/
 
+# Build artifacts
+artifacts/
+artifacts-*/
+cache/
+cache-*/
+out/
+bytecode/
+typechain/
+typechain-types/
+*.o
+*.log
+
 # Environment variables
 .env
 .env.local
@@ -14,25 +26,22 @@ yarn-error.log
 .env.test.local
 .env.production.local
 deployment.env
+config/.env*
+**/deployment.env
+**/deployment*.env
 
 # IDE files
 .idea/
 .vscode/
 *.code-workspace
 .DS_Store
+.cursor/
+.cursor*/
 
 # Hardhat files
-cache/
-cache-cc/
-cache_temp/
-cache_test/
-artifacts/
-artifacts-cc/
-artifacts_temp/
-artifacts_test/
-typechain/
-typechain-types/
-out/
+coverage/
+coverage.json
+.openzeppelin/
 
 # Sensitive files - NEVER COMMIT THESE!
 private_key.txt
@@ -41,84 +50,28 @@ api_key.txt
 **/api_key.txt
 secret.json
 secrets.json
-
-# Project backup
-backup/
+**/serviceAccountKey.json
+**/*credential*
+**/apikey*
 keystore*.json
 
-# Deployment backups - contain sensitive data
-
-# Ignore deployment scripts (do not commit)
-/deployment/
-# /integrations/ (commented out to allow access to lottery-notifications)
-# /integrations/
-
-# Ignore config folders that may contain secrets
-/deployment/config/
-
-# Explicitly ignore any .env, key, or secret files anywhere
-*.env
-*.key
-*.pem
-*.crt
-*.p12
-*.cer
-*.der
-*.jks
-*.keystore
-*.gpg
-*.asc
-
-# Do not commit any scripts or files in deployment/ or integrations/
-
-.backup-*/
-.backup-configs-*/
-*-backup/
-backup-*/
+# Backup files
 backup/
-backups/
+*backup*/
+*.backup
+*.bak
+.backup*/
+*-backup/
+temp/
+*temp*/
+*.tmp
 
-# Contract info
-contract-addresses.json
+# Test results
+gas-report.txt
+*test-results*
 
-# Build artifacts
-out/
-*.o
-*.log
-
-# Cursor
-.cursor/
-
-# Security (as a precaution)
-*private*
-*secret*
-*wallet*
-*key*
-
-# Hardhat
-coverage/
-coverage.json
-.openzeppelin/
-
-# Deployment
+# Deployment artifacts
 deployed-addresses.json
 deployment.log
-deploy/config/*
-**/deployment-files/
-**/apikey*.txt
-**/secrets/
-**/credentials/
-
-# Testing
-gas-report.txt
-
-# Temp files
-*temp*
-*_temp*
-*.tmp
-*-temp.js
-*.backup
-
-# Misc
-.notes
-.todo integrations/telegram-cloud-function/serviceAccountKey.json
+deployment-files/
+integrations/telegram-cloud-function/serviceAccountKey.json

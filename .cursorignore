@@ -1,9 +1,0 @@
-# Ignore all other sensitive files
-*.pem
-*.key
-*.p12
-*.cer
-
-# Explicitly allow .env files
-!.env
-!config/.env 

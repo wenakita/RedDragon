@@ -101,4 +101,28 @@ node scripts/test-native-token-swap.js
 npx hardhat test test/CrossChainTokenSwapTest.js
 ```
 
-For more details, see [NATIVE-TOKEN-SWAP-TESTING.md](docs/NATIVE-TOKEN-SWAP-TESTING.md). 
+For more details, see [NATIVE-TOKEN-SWAP-TESTING.md](docs/NATIVE-TOKEN-SWAP-TESTING.md).
+
+## Repository Organization
+
+This repository has been cleaned up and organized for better maintainability:
+
+### Core Components
+- `contracts/`: Smart contract source code
+  - `math/`: Math libraries and utilities
+  - `interfaces/`: Contract interfaces
+- `test/`: Test files for contracts
+  - `math/`: Mathematical function tests
+
+### Documentation
+- `docs/`: Project documentation
+  - `guides/`: Usage and implementation guides
+  - `testing/`: Testing procedures and results
+
+### Development
+- `scripts/`: Deployment and utility scripts
+- `lib/`: External libraries and dependencies
+
+### Configuration
+- `hardhat.config.js`: Main Hardhat configuration
+- `foundry.toml`: Foundry configuration for tests 
