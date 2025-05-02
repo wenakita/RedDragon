@@ -121,4 +121,4 @@ gas-report.txt
 
 # Misc
 .notes
-.todo 
+.todo integrations/telegram-cloud-function/serviceAccountKey.json
