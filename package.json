@@ -48,7 +48,7 @@
     "@layerzerolabs/lz-evm-protocol-v2": "^2.0.6",
     "@layerzerolabs/oapp-evm": "^0.3.2",
     "@layerzerolabs/solidity-examples": "^1.1.0",
-    "@openzeppelin/contracts-upgradeable": "^4.8.0",
+    "@openzeppelin/contracts-upgradeable": "^5.0.2",
     "@pythnetwork/pyth-sdk-solidity": "^4.1.0",
     "axios": "^1.9.0",
     "chalk": "^4.1.2",
