@@ -50,7 +50,7 @@
     "@layerzerolabs/solidity-examples": "^1.1.0",
     "@openzeppelin/contracts-upgradeable": "^4.8.0",
     "@pythnetwork/pyth-sdk-solidity": "^4.1.0",
-    "axios": "^1.9.0",
+    "axios": "^1.16.0",
     "chalk": "^4.1.2",
     "dotenv": "^16.5.0",
     "form-data": "^4.0.2",
